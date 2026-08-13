@@ -7,8 +7,8 @@ const CONFIG = {
     // Twitch Developer Console Client ID for Login with Twitch OAuth
     TWITCH_CLIENT_ID: "uruqm8g5qqisy395tk312ph08e138f",
     
-    // Dynamic OAuth Redirect URI matching current site location
-    REDIRECT_URI: window.location.origin + window.location.pathname,
+    // OAuth Redirect URI
+    REDIRECT_URI: "https://steveroars.github.io/SRFishing/",
     
     // Auto Refresh Interval for Live Sync (in milliseconds)
     SYNC_INTERVAL_MS: 5000
