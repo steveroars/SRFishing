@@ -517,14 +517,27 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        invGrid.innerHTML = items.map(item => `
-            <div class="item-card">
-                <img src="assets/baits/standard_bait.png" class="item-img" alt="${item.itemName}">
-                <div class="item-name">${item.itemName}</div>
-                <div class="item-desc">Quantity: ${item.quantity}</div>
-                <button class="btn-action">Equip / Use</button>
-            </div>
-        `).join('');
+        invGrid.innerHTML = items.map(item => {
+            const name = item.itemName || item.name || 'Item';
+            let icon = 'assets/baits/standard_bait.png';
+            if (name.toLowerCase().includes('power')) icon = 'assets/baits/power_bait.png';
+            else if (name.toLowerCase().includes('super')) icon = 'assets/baits/super_bait.png';
+            else if (name.toLowerCase().includes('trophy')) icon = 'assets/Icons/trophy_bait.png';
+            else if (name.toLowerCase().includes('common')) icon = 'assets/Icons/common_uncommon_med.png';
+            else if (name.toLowerCase().includes('rare')) icon = 'assets/Icons/rare_legendary_med.png';
+            else if (name.toLowerCase().includes('mythical')) icon = 'assets/Icons/mythical_divine_med.png';
+            else if (name.toLowerCase().includes('egg')) icon = 'assets/Icons/fish_eggs.png';
+
+            return `
+                <div class="item-card">
+                    <span class="item-badge rarity-common">INVENTORY</span>
+                    <img src="${icon}" class="item-img" alt="${name}" style="object-fit:contain;">
+                    <div class="item-name">${name}</div>
+                    <div class="item-desc">Quantity: <b>x${item.quantity}</b></div>
+                    <button class="btn-action btn-gold">Equip / Use</button>
+                </div>
+            `;
+        }).join('');
     }
 
     function renderGearTab() {
@@ -573,22 +586,76 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!tankVisualizer) return;
 
         const tankFish = state.userProfile ? (state.userProfile.tankFish || []) : [];
-        
-        let fishHtml = tankFish.map((fish, index) => {
-            const topPos = 20 + (index * 25) % 60;
-            const leftPos = 15 + (index * 30) % 70;
-            return `<img src="assets/fish/legendary/golden_carp.png" class="swimming-fish" style="top: ${topPos}%; left: ${leftPos}%;" title="${fish.species ? fish.species.name : 'Fish'} (HP: ${fish.currentHp}/${fish.maxHp})">`;
-        }).join('');
+        const hasAutoFeeder = state.userProfile && state.userProfile.hasAutoFeeder;
+        const capacity = state.userProfile ? (state.userProfile.tankCapacity || 3) : 3;
+
+        // Top Action Header for Tank & Battle Arena
+        const tankHeaderHtml = `
+            <div style="position: absolute; top: 15px; left: 20px; right: 20px; z-index: 50; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; background: rgba(4, 15, 30, 0.85); backdrop-filter: blur(10px); border: 1px solid rgba(0, 229, 255, 0.25); padding: 12px 20px; border-radius: var(--radius-md);">
+                <div>
+                    <div style="font-weight: 700; font-size: 1rem; color: #fff; display: flex; align-items: center; gap: 8px;">
+                        <span>🐠 Aquarium Capacity:</span>
+                        <span style="color: var(--accent-cyan); font-weight: 800;">${tankFish.length} / ${capacity} Slots</span>
+                        ${hasAutoFeeder ? '<span style="font-size:0.75rem; background:rgba(0,229,255,0.15); color:var(--accent-cyan); border:1px solid rgba(0,229,255,0.3); padding:2px 8px; border-radius:12px;">🤖 Auto-Feeder Active</span>' : ''}
+                    </div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
+                        Feed status: 12h cycle | Passive regen (+10% HP / 30m) active while fed
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn-action btn-gold" style="width: auto; padding: 8px 18px; font-weight:700;" onclick="window.feedTank()">
+                        🥣 Feed Tank (1,000 Gold)
+                    </button>
+                    <button class="btn-action" style="width: auto; padding: 8px 20px; font-weight:800; background: linear-gradient(135deg, var(--accent-rose), #e11d48); color: #fff; box-shadow: 0 0 15px rgba(244,63,94,0.4);" onclick="window.launchFishBattle()">
+                        ⚔️ Start RPG Fish Battle
+                    </button>
+                </div>
+            </div>
+        `;
+
+        let fishHtml = '';
+        if (tankFish.length === 0) {
+            fishHtml = `
+                <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: var(--text-muted); pointer-events: none;">
+                    <div style="font-size: 3rem; margin-bottom: 8px;">🐠</div>
+                    <div style="font-size: 1.1rem; font-weight: 700; color: #fff;">Your Aquarium Tank is Empty</div>
+                    <div style="font-size: 0.85rem; margin-top: 4px;">Transfer caught fish from your Fishing Net to store them in your tank!</div>
+                </div>
+            `;
+        } else {
+            fishHtml = tankFish.map((fish, index) => {
+                const specName = fish.species ? (fish.species.name || fish.speciesName || 'Fish') : (fish.speciesName || 'Fish');
+                const catalogMatch = MASTER_SPECIES_CATALOG.find(c => c.name.toLowerCase() === specName.toLowerCase());
+                const fishAsset = catalogMatch ? catalogMatch.asset : (fish.species && fish.species.iconUrl ? fish.species.iconUrl : 'assets/fish/legendary/golden_carp.png');
+                const curHp = fish.currentHp !== undefined ? fish.currentHp : (fish.hp !== undefined ? fish.hp : 100);
+                const maxHp = fish.maxHp || 100;
+                const hpPct = Math.min(100, Math.max(0, Math.floor((curHp / maxHp) * 100)));
+
+                // Swimming positions
+                const topPos = 28 + (index * 22) % 50;
+                const leftPos = 12 + (index * 28) % 65;
+
+                return `
+                    <div class="swimming-fish-wrapper" style="top: ${topPos}%; left: ${leftPos}%;" title="${specName} (HP: ${curHp}/${maxHp})">
+                        <img src="${fishAsset}" class="swimming-fish-img" alt="${specName}">
+                        <div class="swimming-fish-label">${fish.nickname || specName}</div>
+                        <div class="swimming-fish-hpbar">
+                            <div class="swimming-fish-hpfill" style="width: ${hpPct}%;"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
 
         let bubblesHtml = '';
-        for (let i = 0; i < 8; i++) {
+        for (let i = 0; i < 10; i++) {
             const size = Math.random() * 12 + 6;
             const left = Math.random() * 95;
             const delay = Math.random() * 4;
             bubblesHtml += `<div class="bubble" style="width:${size}px; height:${size}px; left:${left}%; animation-delay:${delay}s;"></div>`;
         }
 
-        tankVisualizer.innerHTML = bubblesHtml + fishHtml;
+        tankVisualizer.innerHTML = tankHeaderHtml + bubblesHtml + fishHtml;
     }
 
     // 5. Upgrades Shop (Matching GAME_SPECS.md Exactly)
@@ -1043,5 +1110,185 @@ document.addEventListener('DOMContentLoaded', () => {
         else state.userProfile.inventoryItems.push({ itemName: baitName, quantity: 1 });
 
         renderProfileData();
+    };
+
+    window.feedTank = async function() {
+        if (!state.userProfile) return;
+        const feedCost = 1000;
+        if (state.userProfile.gold < feedCost) {
+            alert(`Insufficient Gold! Feeding tank requires ${feedCost} Gold.`);
+            return;
+        }
+
+        try {
+            const res = await fetch(`${window.CONFIG.API_BASE_URL}/api/tank/feed`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: state.userProfile.id })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                if (data.newGold !== undefined) state.userProfile.gold = data.newGold;
+            } else {
+                state.userProfile.gold -= feedCost;
+            }
+        } catch (err) {
+            state.userProfile.gold -= feedCost;
+        }
+
+        alert("🥣 Tank fish fed! 12-hour starvation timer reset.");
+        renderProfileData();
+    };
+
+    window.launchFishBattle = function() {
+        const tankFish = (state.userProfile && state.userProfile.tankFish) ? state.userProfile.tankFish : [];
+        if (tankFish.length === 0) {
+            alert("Your aquarium tank has no fish! Transfer a fish from your Fishing Net into your Tank to enter battles.");
+            return;
+        }
+
+        const myFish = tankFish[0];
+        const mySpecName = myFish.species ? (myFish.species.name || myFish.speciesName || 'Golden Carp') : (myFish.speciesName || 'Golden Carp');
+        const catalogMatch = MASTER_SPECIES_CATALOG.find(c => c.name.toLowerCase() === mySpecName.toLowerCase());
+        const myAsset = catalogMatch ? catalogMatch.asset : 'assets/fish/legendary/golden_carp.png';
+        const myHpMax = myFish.maxHp || 120;
+        let myCurHp = myHpMax;
+        const myAtk = myFish.atk || 35;
+
+        // Enemy Boss
+        const bosses = [
+            { name: "Abyssal Leviathan", hp: 160, atk: 28, asset: "assets/fish/mythical/abyssal_dragon.png" },
+            { name: "Phantom Kraken", hp: 190, atk: 32, asset: "assets/fish/mythical/ethereal_kraken.png" },
+            { name: "Golden Dragonfish", hp: 140, atk: 38, asset: "assets/fish/legendary/golden_dragonfish.png" }
+        ];
+        const boss = bosses[Math.floor(Math.random() * bosses.length)];
+        let bossCurHp = boss.hp;
+
+        // Modal Overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'battle-overlay';
+        overlay.id = 'battleModalOverlay';
+
+        overlay.innerHTML = `
+            <div class="battle-arena-card">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <h2 style="font-size:1.4rem; font-weight:800; color:var(--accent-cyan);">⚔️ RPG Fish Battle Arena</h2>
+                    <span style="font-size:0.85rem; color:var(--text-muted);">Stream Fishing RPG Combat Theater</span>
+                </div>
+
+                <div class="battle-theater">
+                    <!-- My Champion -->
+                    <div class="combatant-card">
+                        <span class="item-badge rarity-legendary">YOUR CHAMPION</span>
+                        <img id="playerFishImg" src="${myAsset}" class="combatant-img" alt="${mySpecName}">
+                        <div style="font-weight:700; font-size:1.1rem; color:#fff;">${myFish.nickname || mySpecName}</div>
+                        <div style="width:100%; max-width:200px;">
+                            <div style="display:flex; justify-content:space-between; font-size:0.8rem; font-weight:700; margin-bottom:4px;">
+                                <span style="color:var(--text-secondary);">HP:</span>
+                                <span id="playerHpTxt" style="color:var(--accent-emerald);">${myCurHp} / ${myHpMax}</span>
+                            </div>
+                            <div class="progress-bar-bg">
+                                <div id="playerHpFill" class="progress-bar-fill complete" style="width:100%;"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="battle-vs-badge">VS</div>
+
+                    <!-- Enemy Boss -->
+                    <div class="combatant-card">
+                        <span class="item-badge rarity-divine">OCEAN BOSS</span>
+                        <img id="bossFishImg" src="${boss.asset}" class="combatant-img" alt="${boss.name}">
+                        <div style="font-weight:700; font-size:1.1rem; color:#fff;">${boss.name}</div>
+                        <div style="width:100%; max-width:200px;">
+                            <div style="display:flex; justify-content:space-between; font-size:0.8rem; font-weight:700; margin-bottom:4px;">
+                                <span style="color:var(--text-secondary);">HP:</span>
+                                <span id="bossHpTxt" style="color:var(--accent-rose);">${bossCurHp} / ${boss.hp}</span>
+                            </div>
+                            <div class="progress-bar-bg">
+                                <div id="bossHpFill" class="progress-bar-fill" style="width:100%; background:linear-gradient(90deg,#f43f5e,#fb7185);"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="battle-log-box" id="battleLogBox">
+                    <div style="color:var(--accent-cyan); font-weight:700;">⚔️ Battle started! ${mySpecName} engages ${boss.name}...</div>
+                </div>
+
+                <div style="display:flex; justify-content:flex-end; gap:12px;" id="battleFooter">
+                    <button class="btn-action btn-gold" id="btnAutoBattle" style="width:auto; padding:10px 28px; font-weight:800;">
+                        🔥 Fight Battle!
+                    </button>
+                    <button class="btn-action" style="width:auto; padding:10px 20px; background:rgba(255,255,255,0.1);" onclick="document.getElementById('battleModalOverlay').remove()">
+                        Close
+                    </button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+
+        const btnFight = document.getElementById('btnAutoBattle');
+        btnFight.addEventListener('click', async () => {
+            btnFight.disabled = true;
+            btnFight.style.opacity = '0.5';
+
+            const logBox = document.getElementById('battleLogBox');
+            const playerImg = document.getElementById('playerFishImg');
+            const bossImg = document.getElementById('bossFishImg');
+
+            let turn = 1;
+
+            const fightLoop = setInterval(() => {
+                if (myCurHp <= 0 || bossCurHp <= 0) {
+                    clearInterval(fightLoop);
+                    
+                    const win = myCurHp > 0;
+                    if (win) {
+                        logBox.innerHTML += `<div style="color:var(--accent-gold); font-weight:800; font-size:0.95rem;">🏆 VICTORY! Your ${mySpecName} defeated ${boss.name}! Rewarded 🪙 2,500 Gold & +1 Battle Win!</div>`;
+                        state.userProfile.gold = (state.userProfile.gold || 0) + 2500;
+                        renderProfileData();
+                    } else {
+                        logBox.innerHTML += `<div style="color:var(--accent-rose); font-weight:800; font-size:0.95rem;">💀 FAINTED! ${mySpecName} was fainted in combat! Use Recovery Meds to revive.</div>`;
+                    }
+                    logBox.scrollTop = logBox.scrollHeight;
+                    return;
+                }
+
+                if (turn % 2 === 1) {
+                    // Player attacks
+                    playerImg.classList.add('attack-lunge-right');
+                    setTimeout(() => playerImg.classList.remove('attack-lunge-right'), 400);
+
+                    const isCrit = Math.random() < 0.25;
+                    const dmg = Math.floor((myAtk + Math.random() * 12) * (isCrit ? 1.5 : 1.0));
+                    bossCurHp = Math.max(0, bossCurHp - dmg);
+
+                    const bossPct = Math.floor((bossCurHp / boss.hp) * 100);
+                    document.getElementById('bossHpTxt').textContent = `${bossCurHp} / ${boss.hp}`;
+                    document.getElementById('bossHpFill').style.width = `${bossPct}%`;
+
+                    logBox.innerHTML += `<div>⚔️ Turn ${turn}: <b>${mySpecName}</b> attacks ${boss.name} for <span style="color:var(--accent-gold); font-weight:700;">${dmg} HP</span> ${isCrit ? '🔥 CRITICAL HIT!' : ''}</div>`;
+                } else {
+                    // Boss attacks
+                    bossImg.classList.add('attack-lunge-left');
+                    setTimeout(() => bossImg.classList.remove('attack-lunge-left'), 400);
+
+                    const dmg = Math.floor(boss.atk + Math.random() * 10);
+                    myCurHp = Math.max(0, myCurHp - dmg);
+
+                    const playerPct = Math.floor((myCurHp / myHpMax) * 100);
+                    document.getElementById('playerHpTxt').textContent = `${myCurHp} / ${myHpMax}`;
+                    document.getElementById('playerHpFill').style.width = `${playerPct}%`;
+
+                    logBox.innerHTML += `<div>💥 Turn ${turn}: <b>${boss.name}</b> strikes back for <span style="color:var(--accent-rose); font-weight:700;">${dmg} HP</span>!</div>`;
+                }
+
+                logBox.scrollTop = logBox.scrollHeight;
+                turn++;
+            }, 600);
+        });
     };
 });
