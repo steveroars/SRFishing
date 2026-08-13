@@ -488,21 +488,42 @@ document.addEventListener('DOMContentLoaded', () => {
             ? `<div style="grid-column: 1/-1; font-size:0.85rem; color:var(--accent-cyan); background:rgba(0,229,255,0.08); border:1px solid rgba(0,229,255,0.25); padding:10px 16px; border-radius:var(--radius-md); text-align:center; margin-bottom:10px;">🧊 <b>Deep Freezer Active:</b> Catches in your Net stay 100% fresh for 3 days (72h) before standard decay applies!</div>`
             : `<div style="grid-column: 1/-1; font-size:0.85rem; color:var(--accent-gold); background:rgba(255,183,3,0.08); border:1px solid rgba(255,183,3,0.25); padding:10px 16px; border-radius:var(--radius-md); text-align:center; margin-bottom:10px;">⏱️ <b>Decay Timer Notice:</b> Unpreserved catches decay in value after 24 hours (50% @ 24h, 40% @ 48h, 30% @ 72h, 25% floor). Purchase the <i>Deep Freezer</i> to keep catches 100% fresh for 3 days!</div>`;
 
-        const cardsHtml = processedCatches.map(item => `
-            <div class="item-card">
-                <span class="item-badge rarity-${item.tierName.toLowerCase()}">${item.tierName.toUpperCase()}</span>
-                <img src="${item.itemAsset}" class="item-img" alt="${item.specName}" style="object-fit:contain; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5));">
-                <div class="item-name">${item.specName}</div>
-                <div class="item-desc">
-                    Weight: <b>${item.weight ? item.weight.toFixed(2) + ' lbs' : '1.00 lbs'}</b><br>
-                    Value: <b style="color:var(--accent-gold);">🪙 ${item.sellPrice.toLocaleString()} Gold</b><br>
-                    <span style="color:${hasFreezer ? 'var(--accent-emerald)' : 'var(--accent-gold)'}; font-size:0.78rem;">
-                        ${hasFreezer ? '🧊 Preserved (3 Days Fresh)' : '⏱️ Fresh (Decays in 24h)'}
-                    </span>
+        const cardsHtml = processedCatches.map(item => {
+            const curHp = item.currentHp !== undefined ? item.currentHp : (item.hp !== undefined ? item.hp : null);
+            const maxHp = item.maxHp || null;
+            const atk = item.atk || item.attack || (item.species && item.species.atk) || null;
+            const qualityMult = item.qualityMultiplier || 1.0;
+            const qualityLabel = qualityMult >= 1.3 ? '⭐ Perfect' : qualityMult >= 1.15 ? '✨ Good' : 'Standard';
+            const qualityColor = qualityMult >= 1.3 ? 'var(--accent-gold)' : qualityMult >= 1.15 ? 'var(--accent-cyan)' : 'var(--text-muted)';
+            const isTrash = item.tierName === 'Trash';
+            const tankFish = state.userProfile ? (state.userProfile.tankFish || []) : [];
+            const tankCap = state.userProfile ? (state.userProfile.tankCapacity || 3) : 3;
+            const tankFull = tankFish.length >= tankCap;
+
+            return `
+                <div class="item-card">
+                    <span class="item-badge rarity-${item.tierName.toLowerCase()}">${item.tierName.toUpperCase()}</span>
+                    <img src="${item.itemAsset}" class="item-img" alt="${item.specName}" style="object-fit:contain; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5));">
+                    <div class="item-name">${item.specName}</div>
+                    <div class="item-desc">
+                        Weight: <b>${item.weight ? item.weight.toFixed(2) + ' lbs' : '1.00 lbs'}</b><br>
+                        Value: <b style="color:var(--accent-gold);">🪙 ${item.sellPrice.toLocaleString()} Gold</b><br>
+                        ${curHp !== null && maxHp !== null ? `❤️ HP: <b>${curHp}/${maxHp}</b>&nbsp; ⚔️ ATK: <b>${atk !== null ? atk : '—'}</b><br>` : ''}
+                        <span style="color:${qualityColor}; font-size:0.78rem; font-weight:700;">${qualityLabel} (${qualityMult.toFixed(2)}x)</span><br>
+                        <span style="color:${hasFreezer ? 'var(--accent-emerald)' : 'var(--accent-gold)'}; font-size:0.78rem;">
+                            ${hasFreezer ? '🧊 Preserved (3 Days Fresh)' : '⏱️ Fresh (Decays in 24h)'}
+                        </span>
+                    </div>
+                    <button class="btn-action btn-gold" onclick="window.sellFish(${item.id}, ${item.sellPrice}, '${item.specName.replace(/'/g, "\\'")}')">Sell 🪙 ${item.sellPrice.toLocaleString()} Gold</button>
+                    ${!isTrash ? `
+                    <button class="btn-action" style="margin-top:4px; background:linear-gradient(135deg,var(--accent-cyan),var(--accent-blue)); color:#000; font-weight:700; ${tankFull ? 'opacity:0.4; cursor:not-allowed;' : ''}" 
+                        onclick="window.sendToTank(${item.id}, '${item.specName.replace(/'/g, "\\'")}')"
+                        ${tankFull ? 'disabled' : ''}>
+                        🐠 ${tankFull ? 'Tank Full' : 'Transfer to Tank'}
+                    </button>` : ''}
                 </div>
-                <button class="btn-action btn-gold" onclick="window.sellFish(${item.id}, ${item.sellPrice}, '${item.specName.replace(/'/g, "\\'")}')">Sell for 🪙 ${item.sellPrice.toLocaleString()} Gold</button>
-            </div>
-        `).join('');
+            `;
+        }).join('');
 
         netGrid.innerHTML = netHeaderHtml + decayNoticeHtml + cardsHtml;
     }
@@ -612,17 +633,19 @@ document.addEventListener('DOMContentLoaded', () => {
                         ${hasLowHpFish ? '<span style="font-size:0.75rem; background:rgba(244,63,94,0.15); color:var(--accent-rose); border:1px solid rgba(244,63,94,0.3); padding:2px 8px; border-radius:12px;">⚠️ Fish HP Low!</span>' : ''}
                     </div>
                     <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
-                        Feed: 12h cycle (+10% HP/30m while fed) &nbsp;|&nbsp; Battles: type <span style="color:var(--accent-gold); font-family:monospace;">!fishbattle [gold]</span> in chat
+                        Feed cycle: 12h &nbsp;|&nbsp; Regen: +10% HP/30m while fed &nbsp;|&nbsp; Alive fish sell at 100%, fainted at 50%
                     </div>
                 </div>
-                <div style="display: flex; gap: 10px; align-items: center;">
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap:wrap;">
                     <button class="btn-action ${canFeed ? 'btn-gold' : ''}" 
                         style="width: auto; padding: 8px 18px; font-weight:700; ${!canFeed ? 'opacity:0.4; cursor:not-allowed; background:var(--bg-secondary); border:1px solid var(--border-color);' : ''}" 
                         onclick="window.feedTank()" ${!canFeed ? 'disabled' : ''}>
                         🥣 Feed Tank (1,000 Gold)
                     </button>
-                    <div style="background:rgba(244,63,94,0.12); border:1px solid rgba(244,63,94,0.3); border-radius:var(--radius-md); padding:7px 14px; font-size:0.82rem; font-weight:700; color:var(--accent-rose); display:flex; align-items:center; gap:6px;">
-                        ⚔️ <span style="color:#fff;">Battles via chat:</span>&nbsp;<code style="background:rgba(255,255,255,0.08); padding:2px 6px; border-radius:4px; color:var(--accent-gold);">!fishbattle [gold]</code>
+                    <div style="background:rgba(244,63,94,0.12); border:1px solid rgba(244,63,94,0.3); border-radius:var(--radius-md); padding:7px 14px; font-size:0.8rem; font-weight:600; color:#fff; line-height:1.5;">
+                        ⚔️ <b style="color:var(--accent-rose);">Chat Battles:</b><br>
+                        <code style="color:var(--accent-gold); font-size:0.78rem;">!fishbattle [gold]</code> — vs random<br>
+                        <code style="color:var(--accent-gold); font-size:0.78rem;">!fishbattle @user [gold]</code> — challenge (60s to accept)
                     </div>
                 </div>
             </div>
@@ -649,6 +672,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const qualityMult = fish.qualityMultiplier || 1.0;
                 const qualityLabel = qualityMult >= 1.3 ? '⭐ Perfect' : qualityMult >= 1.15 ? '✨ Good' : 'Standard';
                 const qualityColor = qualityMult >= 1.3 ? 'var(--accent-gold)' : qualityMult >= 1.15 ? 'var(--accent-cyan)' : 'var(--text-muted)';
+                const isFainted = curHp <= 0;
+                const basePrice = catalogMatch ? catalogMatch.basePrice : 10;
+                const aliveSell = Math.max(1, Math.floor(basePrice * qualityMult));
+                const sellVal = isFainted ? Math.floor(aliveSell * 0.5) : aliveSell;
 
                 // Spread out swimming positions
                 const topPos = 28 + (index * 22) % 50;
@@ -656,8 +683,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 return `
                     <div class="swimming-fish-wrapper" style="top: ${topPos}%; left: ${leftPos}%;" title="${specName} (HP: ${curHp}/${maxHp} | ATK: ${atk})">
-                        <img src="${fishAsset}" class="swimming-fish-img" alt="${specName}">
-                        <div class="swimming-fish-label">${fish.nickname || specName}</div>
+                        <img src="${fishAsset}" class="swimming-fish-img" alt="${specName}" style="${isFainted ? 'filter: grayscale(1) drop-shadow(0 6px 12px rgba(0,0,0,0.6)); opacity:0.6;' : 'filter: drop-shadow(0 6px 12px rgba(0,0,0,0.6));'}">
+                        <div class="swimming-fish-label">${fish.nickname || specName}${isFainted ? ' 💀' : ''}</div>
                         <div class="swimming-fish-hpbar">
                             <div class="swimming-fish-hpfill" style="width: ${hpPct}%; background: ${hpPct < 30 ? 'linear-gradient(90deg,#f43f5e,#fb7185)' : hpPct < 60 ? 'linear-gradient(90deg,#fb8500,#ffb703)' : 'linear-gradient(90deg,#10b981,#34d399)'}"></div>
                         </div>
@@ -665,6 +692,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             ❤️ ${curHp}/${maxHp} &nbsp;⚔️ ${atk} ATK<br>
                             <span style="color:${qualityColor}; font-weight:700;">${qualityLabel} (${qualityMult.toFixed(2)}x)</span>
                         </div>
+                        <button onclick="window.sellTankFish(${fish.id}, ${sellVal}, '${specName.replace(/'/g, "\\'")}')"
+                            style="margin-top:5px; padding:3px 10px; font-size:0.72rem; font-weight:700; border:none; border-radius:6px; cursor:pointer; background:linear-gradient(135deg,#ffb703,#fb8500); color:#000;">
+                            Sell 🪙 ${sellVal.toLocaleString()}${isFainted ? ' (50%)' : ''}
+                        </button>
                     </div>
                 `;
             }).join('');
@@ -747,14 +778,13 @@ document.addEventListener('DOMContentLoaded', () => {
             else if (tier === 'rare') rareCount++;
         });
 
-        // Recipe counts from GAME_SPECS.md:
-        // Standard Bait: 15 Common | Power Bait: 10 Uncommon | Super Bait: 17 Rare
+        // Crafting recipes: Standard=4 Common | Power=6 Uncommon | Super=5 Rare
         const recipes = [
             {
                 id: "standard",
                 name: "Standard Bait",
                 reqTier: "Common",
-                requiredCount: 15,
+                requiredCount: 4,
                 currentCount: commonCount,
                 desc: "2x odds for anything above Common",
                 icon: "assets/baits/standard_bait.png"
@@ -763,7 +793,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 id: "power",
                 name: "Power Bait",
                 reqTier: "Uncommon",
-                requiredCount: 10,
+                requiredCount: 6,
                 currentCount: uncommonCount,
                 desc: "2x odds for anything above Uncommon",
                 icon: "assets/baits/power_bait.png"
@@ -772,7 +802,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 id: "super",
                 name: "Super Bait",
                 reqTier: "Rare",
-                requiredCount: 17,
+                requiredCount: 5,
                 currentCount: rareCount,
                 desc: "Guarantees anything above Uncommon",
                 icon: "assets/baits/super_bait.png"
@@ -1094,8 +1124,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const baitName = baitId === 'super' ? 'Super Bait' : baitId === 'power' ? 'Power Bait' : 'Standard Bait';
         const targetTier = baitId === 'super' ? 'rare' : baitId === 'power' ? 'uncommon' : 'common';
-        // Per GAME_SPECS.md: Standard = 15 Common | Power = 10 Uncommon | Super = 17 Rare
-        const reqCount = baitId === 'super' ? 17 : baitId === 'power' ? 10 : 15;
+        // Crafting recipe counts: Standard=4 Common | Power=6 Uncommon | Super=5 Rare
+        const reqCount = baitId === 'super' ? 5 : baitId === 'power' ? 6 : 4;
 
         try {
             const res = await fetch(`${window.CONFIG.API_BASE_URL}/api/craft/craft-bait`, {
@@ -1164,6 +1194,66 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         alert("🥣 Tank fish fed! 12-hour starvation timer reset.");
+        renderProfileData();
+    };
+
+    window.sendToTank = async function(catchId, specName) {
+        if (!state.userProfile) return;
+        const tankFish = state.userProfile.tankFish || [];
+        const capacity = state.userProfile.tankCapacity || 3;
+        if (tankFish.length >= capacity) {
+            alert(`Tank is full! (${tankFish.length}/${capacity} slots used). Sell or release a fish first.`);
+            return;
+        }
+
+        try {
+            const res = await fetch(`${window.CONFIG.API_BASE_URL}/api/tank/transfer`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: state.userProfile.id, catchId: catchId })
+            });
+            if (res.ok) {
+                fetchUserProfile();
+                return;
+            }
+        } catch (err) {
+            console.warn('Transfer to tank API fallback:', err);
+        }
+
+        // Local state fallback
+        const netCatches = state.userProfile.netCatches || [];
+        const fish = netCatches.find(c => c.id === catchId);
+        if (fish) {
+            state.userProfile.netCatches = netCatches.filter(c => c.id !== catchId);
+            if (!state.userProfile.tankFish) state.userProfile.tankFish = [];
+            state.userProfile.tankFish.push(fish);
+        }
+        renderProfileData();
+    };
+
+    window.sellTankFish = async function(fishId, sellPrice, specName) {
+        if (!state.userProfile) return;
+        if (!confirm(`Sell ${specName} from your tank for 🪙 ${sellPrice.toLocaleString()} Gold?`)) return;
+
+        try {
+            const res = await fetch(`${window.CONFIG.API_BASE_URL}/api/tank/sell`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: state.userProfile.id, fishId: fishId })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.newGold !== undefined) state.userProfile.gold = data.newGold;
+                fetchUserProfile();
+                return;
+            }
+        } catch (err) {
+            console.warn('Sell tank fish API fallback:', err);
+        }
+
+        // Local state fallback
+        state.userProfile.gold = (state.userProfile.gold || 0) + sellPrice;
+        state.userProfile.tankFish = (state.userProfile.tankFish || []).filter(f => f.id !== fishId);
         renderProfileData();
     };
 
