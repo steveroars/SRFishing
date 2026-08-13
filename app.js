@@ -433,11 +433,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Daily Claim 1,000 Gold Logic (24-Hour Cycle)
+    // Daily Claim 1,000 Gold Logic (24-Hour Cycle with LocalStorage Persistence)
     function getDailyClaimStatus() {
         if (!state.userProfile) return { canClaim: false, timeRemainingStr: '' };
 
-        const lastClaimStr = state.userProfile.lastDailyClaimTime;
+        const userId = state.userProfile.id || 'viewer_demo';
+        const localClaimStr = localStorage.getItem('srf_last_daily_' + userId);
+        const lastClaimStr = state.userProfile.lastDailyClaimTime || localClaimStr;
         const lastClaim = lastClaimStr ? new Date(lastClaimStr).getTime() : 0;
         const now = Date.now();
         const elapsed = now - lastClaim;
@@ -468,7 +470,7 @@ document.addEventListener('DOMContentLoaded', () => {
             text.textContent = 'Claim Daily (1,000 Gold)';
         } else {
             btn.disabled = true;
-            btn.style.opacity = '0.5';
+            btn.style.opacity = '0.6';
             btn.style.cursor = 'not-allowed';
             btn.className = 'btn-action';
             text.textContent = `Daily: ${status.timeRemainingStr}`;
@@ -483,10 +485,16 @@ document.addEventListener('DOMContentLoaded', () => {
             window.showAppModal({
                 icon: '⏳',
                 title: 'Daily Reward Already Claimed',
-                message: `@${state.userProfile.username || 'Viewer'} already claimed the daily! Come back in ${status.timeRemainingStr}.`
+                message: `@${state.userProfile.username || 'Viewer'} already claimed the daily reward! Come back in ${status.timeRemainingStr}.`
             });
             return;
         }
+
+        const nowIso = new Date().toISOString();
+        const userId = state.userProfile.id || 'viewer_demo';
+        localStorage.setItem('srf_last_daily_' + userId, nowIso);
+        state.userProfile.lastDailyClaimTime = nowIso;
+        state.userProfile.gold = (state.userProfile.gold || 0) + 1000;
 
         try {
             const res = await fetch(`${window.CONFIG.API_BASE_URL}/api/user/claim-daily`, {
@@ -494,18 +502,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId: state.userProfile.id })
             });
-
             if (res.ok) {
                 const data = await res.json();
-                state.userProfile.gold = data.newGold !== undefined ? data.newGold : (state.userProfile.gold + 1000);
-                state.userProfile.lastDailyClaimTime = new Date().toISOString();
-            } else {
-                state.userProfile.gold = (state.userProfile.gold || 0) + 1000;
-                state.userProfile.lastDailyClaimTime = new Date().toISOString();
+                if (data.newGold !== undefined) state.userProfile.gold = data.newGold;
             }
         } catch (err) {
-            state.userProfile.gold = (state.userProfile.gold || 0) + 1000;
-            state.userProfile.lastDailyClaimTime = new Date().toISOString();
+            console.warn('API daily claim fallback:', err);
         }
 
         renderProfileData();
@@ -658,10 +660,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             ${hasFreezer ? '🧊 Preserved (3 Days Fresh)' : '⏱️ Fresh (Decays in 24h)'}
                         </span>
                     </div>
-                    <button class="btn-action btn-gold" onclick="window.sellFish(${item.id}, ${item.sellPrice}, '${item.specName.replace(/'/g, "\\'")}')">Sell 🪙 ${item.sellPrice.toLocaleString()} Gold</button>
+                    <button class="btn-action btn-gold" onclick="window.sellFish('${item.id}', ${item.sellPrice}, '${item.specName.replace(/'/g, "\\'")}')">Sell 🪙 ${item.sellPrice.toLocaleString()} Gold</button>
                     ${!isTrash ? `
                     <button class="btn-action" style="margin-top:4px; background:linear-gradient(135deg,var(--accent-cyan),var(--accent-blue)); color:#000; font-weight:700; ${tankFull ? 'opacity:0.4; cursor:not-allowed;' : ''}" 
-                        onclick="window.sendToTank(${item.id}, '${item.specName.replace(/'/g, "\\'")}')"
+                        onclick="window.sendToTank('${item.id}', '${item.specName.replace(/'/g, "\\'")}')"
                         ${tankFull ? 'disabled' : ''}>
                         🐠 ${tankFull ? 'Tank Full' : 'Transfer to Tank'}
                     </button>` : ''}
@@ -839,8 +841,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             ❤️ ${curHp}/${maxHp} &nbsp;⚔️ ${atk} ATK<br>
                             <span style="color:${qualityColor}; font-weight:700;">${qualityLabel} (${qualityMult.toFixed(2)}x)</span>
                         </div>
-                        <button onclick="window.sellTankFish(${fish.id}, ${sellVal}, '${specName.replace(/'/g, "\\'")}')"
-                            style="margin-top:5px; padding:3px 10px; font-size:0.72rem; font-weight:700; border:none; border-radius:6px; cursor:pointer; background:linear-gradient(135deg,#ffd166,#ffb703); color:#000;">
+                        <button class="btn-action btn-gold" onclick="window.sellTankFish('${fish.id}', ${sellVal}, '${specName.replace(/'/g, "\\'")}')"
+                            style="margin-top:5px; padding:4px 12px; font-size:0.75rem; font-weight:800; border-radius:6px; cursor:pointer;">
                             Sell 🪙 ${sellVal.toLocaleString()}${isFainted ? ' (50%)' : ''}
                         </button>
                     </div>
@@ -872,9 +874,9 @@ document.addEventListener('DOMContentLoaded', () => {
             { name: "Divine Rod", price: 300000, desc: "-60% Cooldown (6 Minutes Cooldown)", icon: "assets/Icons/divine_rod.png", category: "Rod" },
 
             // Baits (Purchasable or Craftable) — per GAME_SPECS.md
-            { name: "Standard Bait", price: 3000, desc: "2x odds for anything above Common (Or Craft: 4 Common Fish)", icon: "assets/baits/standard_bait.png", category: "Bait" },
-            { name: "Power Bait", price: 10000, desc: "2x odds for anything above Uncommon (Or Craft: 6 Uncommon Fish)", icon: "assets/baits/power_bait.png", category: "Bait" },
-            { name: "Super Bait", price: 55000, desc: "Guarantees anything above Uncommon (Or Craft: 5 Rare Fish)", icon: "assets/baits/super_bait.png", category: "Bait" },
+            { name: "Standard Bait", price: 2000, desc: "2x odds for anything above Common (Or Craft: 4 Common Fish)", icon: "assets/baits/standard_bait.png", category: "Bait" },
+            { name: "Power Bait", price: 7000, desc: "2x odds for anything above Uncommon (Or Craft: 6 Uncommon Fish)", icon: "assets/baits/power_bait.png", category: "Bait" },
+            { name: "Super Bait", price: 10000, desc: "Guarantees anything above Uncommon (Or Craft: 5 Rare Fish)", icon: "assets/baits/super_bait.png", category: "Bait" },
 
             // Consumables & Recovery Meds
             { name: "Common & Uncommon Med", price: 2500, desc: "Revives fainted Common/Uncommon fish to 50% HP", icon: "assets/Icons/common_uncommon_med.png", category: "Med" },
@@ -897,7 +899,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 <img src="${item.icon}" class="item-img" alt="${item.name}">
                 <div class="item-name">${item.name}</div>
                 <div class="item-desc">${item.desc}</div>
-                <button class="btn-action btn-gold">${item.price === 0 ? 'Free Starting Rod' : 'Buy for ' + item.price.toLocaleString() + ' Gold'}</button>
+                <button class="btn-action btn-gold" onclick="window.buyShopItem('${item.name.replace(/'/g, "\\'")}', ${item.price})">
+                    ${item.price === 0 ? 'Free Starting Rod' : 'Buy for 🪙 ' + item.price.toLocaleString() + ' Gold'}
+                </button>
             </div>
         `).join('');
     }
@@ -1007,11 +1011,13 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `;
 
-        ranksGrid.innerHTML = subTabsNavHtml + `
-            <div style="grid-column: 1/-1; text-align:center; padding: 40px; color: var(--text-muted);">
-                🔄 Loading Leaderboard...
-            </div>
-        `;
+        if (!ranksGrid.dataset.loaded) {
+            ranksGrid.innerHTML = subTabsNavHtml + `
+                <div style="grid-column: 1/-1; text-align:center; padding: 40px; color: var(--text-muted);">
+                    🔄 Loading Leaderboard...
+                </div>
+            `;
+        }
 
         try {
             const [catchesRes, trophiesRes, goldRes, battlesRes] = await Promise.all([
@@ -1113,6 +1119,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             ranksGrid.innerHTML = subTabsNavHtml + cardContentHtml;
+            ranksGrid.dataset.loaded = 'true';
         } catch (err) {
             console.error("Error loading leaderboards:", err);
         }
@@ -1344,6 +1351,61 @@ document.addEventListener('DOMContentLoaded', () => {
             icon: '💰',
             title: 'Net Emptied!',
             message: `Sold all ${count} catches from your Fishing Net for 🪙 ${totalValue.toLocaleString()} Gold!`
+        });
+    };
+
+    window.buyShopItem = async function(itemName, price) {
+        if (!state.userProfile) return;
+
+        if (price > 0 && (state.userProfile.gold || 0) < price) {
+            window.showAppModal({
+                icon: '⚠️',
+                title: 'Insufficient Gold',
+                message: `You need 🪙 ${price.toLocaleString()} Gold to purchase ${itemName}.`
+            });
+            return;
+        }
+
+        if (price > 0) {
+            state.userProfile.gold = (state.userProfile.gold || 0) - price;
+        }
+
+        const nameLower = itemName.toLowerCase();
+
+        if (nameLower.includes('rod')) {
+            state.userProfile.activeRod = itemName;
+        } else if (nameLower.includes('tank upgrade')) {
+            state.userProfile.tankCapacity = 5;
+        } else if (nameLower.includes('auto-feeder')) {
+            state.userProfile.hasAutoFeeder = true;
+        } else if (nameLower.includes('deep freezer')) {
+            state.userProfile.hasDeepFreezer = true;
+        } else if (nameLower.includes('fishing vessel')) {
+            state.userProfile.hasFishingVessel = true;
+        } else if (nameLower.includes('fishing net')) {
+            state.userProfile.hasFishingNet = true;
+        } else {
+            if (!state.userProfile.inventoryItems) state.userProfile.inventoryItems = [];
+            const existing = state.userProfile.inventoryItems.find(i => (i.itemName || i.name || '').toLowerCase() === nameLower);
+            if (existing) existing.quantity++;
+            else state.userProfile.inventoryItems.push({ itemName: itemName, quantity: 1 });
+        }
+
+        try {
+            await fetch(`${window.CONFIG.API_BASE_URL}/api/shop/buy`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: state.userProfile.id, itemName: itemName })
+            });
+        } catch (err) {
+            console.warn('API buy fallback:', err);
+        }
+
+        renderProfileData();
+        window.showAppModal({
+            icon: '🛍️',
+            title: 'Purchase Successful!',
+            message: `Successfully purchased ${itemName} for 🪙 ${price.toLocaleString()} Gold!`
         });
     };
 
