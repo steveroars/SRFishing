@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- Primary Meta Tags -->
+    <title>SR Fishing RPG - Web Companion & Viewer Portal</title>
+    <meta name="title" content="SR Fishing RPG - Web Companion & Viewer Portal">
+    <meta name="description" content="Play SR Fishing RPG online! Connect your Twitch account to view your catches, manage your fish tank, upgrade fishing rods, craft bait, and compete on the channel leaderboard.">
+    
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <!-- Header / Navigation Bar -->
+    <header class="app-header">
+        <div class="brand-container">
+            <div class="brand-logo">
+                <svg viewBox="0 0 24 24">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 14.5h-2v-2h2v2zm0-4h-2V7h2v5.5z"/>
+                </svg>
+            </div>
+            <div>
+                <span class="brand-title">SR FISHING RPG</span>
+                <span class="brand-badge">Web Edition</span>
+            </div>
+        </div>
+
+        <div class="header-user-status">
+            <!-- Logged Out Container -->
+            <div id="loggedOutContainer">
+                <button id="btnTwitchLogin" class="btn-twitch-login">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M11.571 4.714h1.715v5.143H11.571zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.429h-3.429l-3 3v-3H6.857V1.714h13.714z"/>
+                    </svg>
+                    Login with Twitch
+                </button>
+            </div>
+
+            <!-- Logged In Container -->
+            <div id="loggedInContainer" style="display: none;" class="user-profile-badge">
+                <img id="userAvatar" src="" alt="User Avatar" class="user-avatar">
+                <span id="userName" class="user-name">Viewer</span>
+                <div class="gold-counter">
+                    <span>🪙</span>
+                    <span id="userGoldVal">0</span>
+                </div>
+                <button id="btnLogout" title="Logout" style="background:none; border:none; color: var(--text-muted); cursor:pointer; font-size:1.1rem; padding-left:6px;">✕</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="app-container">
+        <!-- Sidebar Navigation Menu -->
+        <aside class="sidebar-card">
+            <ul class="nav-menu">
+                <li>
+                    <a class="nav-item active" data-tab="net" href="#net">
+                        <svg viewBox="0 0 24 24"><path d="M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-6 0h-4V4h4v2z"/></svg>
+                        Fishing Net
+                    </a>
+                </li>
+                <li>
+                    <a class="nav-item" data-tab="inventory" href="#inventory">
+                        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.11 0-2 .89-2 2v14c0 1.11.89 2 2 2h14c1.11 0 2-.89 2-2V5c0-1.11-.89-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg>
+                        Inventory
+                    </a>
+                </li>
+                <li>
+                    <a class="nav-item" data-tab="gear" href="#gear">
+                        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 14.5h-2v-2h2v2zm0-4h-2V7h2v5.5z"/></svg>
+                        Gear & Equipment
+                    </a>
+                </li>
+                <li>
+                    <a class="nav-item" data-tab="tank" href="#tank">
+                        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+                        Aquarium Tank
+                    </a>
+                </li>
+                <li>
+                    <a class="nav-item" data-tab="shop" href="#shop">
+                        <svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg>
+                        Upgrades Shop
+                    </a>
+                </li>
+                <li>
+                    <a class="nav-item" data-tab="craft" href="#craft">
+                        <svg viewBox="0 0 24 24"><path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.6C.4 7 1 10 3 12c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.4-.4.4-1.1 0-1.4z"/></svg>
+                        Crafting Station
+                    </a>
+                </li>
+                <li>
+                    <a class="nav-item" data-tab="ranks" href="#ranks">
+                        <svg viewBox="0 0 24 24"><path d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-2.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm14 0c0 1.3-.84 2.4-2 2.82V7h2v1z"/></svg>
+                        Leaderboards
+                    </a>
+                </li>
+                <li>
+                    <a class="nav-item" data-tab="log" href="#log">
+                        <svg viewBox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12z"/></svg>
+                        Fish Encyclopedia
+                    </a>
+                </li>
+            </ul>
+        </aside>
+
+        <!-- Main Dashboard Area -->
+        <main class="main-content">
+            
+            <!-- Hero Stats Banner -->
+            <section class="hero-banner">
+                <div class="hero-info">
+                    <h1>Welcome to SR Fishing Web</h1>
+                    <p>Track your catches, manage your aquarium, and upgrade your gear in real-time while watching the stream!</p>
+                </div>
+                <div class="hero-stats">
+                    <div class="stat-pill">
+                        <div class="val" id="statGold">0</div>
+                        <div class="lbl">Gold</div>
+                    </div>
+                    <div class="stat-pill">
+                        <div class="val" id="statCatches">0</div>
+                        <div class="lbl">Net Catches</div>
+                    </div>
+                    <div class="stat-pill">
+                        <div class="val" id="statRod">Basic</div>
+                        <div class="lbl">Active Rod</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Cast Cooldown Banner -->
+            <div class="cooldown-widget">
+                <div>
+                    <div style="font-weight: 700; font-size: 0.95rem;">CAST COOLDOWN</div>
+                    <div style="font-size: 0.82rem; color: var(--text-secondary);">Type <span class="command-pill">!fish</span> in Twitch chat to cast your line!</div>
+                </div>
+                <div class="cooldown-timer" id="cooldownTimerVal">00:00</div>
+            </div>
+
+            <!-- Tab Pane: Net -->
+            <section id="tab-net" class="tab-pane active">
+                <div class="section-header">
+                    <h2 class="section-title">🎣 Your Fishing Net</h2>
+                    <span style="font-size: 0.85rem; color: var(--text-muted);">Sell catches or transfer to tank</span>
+                </div>
+                <div id="netGrid" class="grid-container">
+                    <!-- Dynamic Net Catches rendered via app.js -->
+                </div>
+            </section>
+
+            <!-- Tab Pane: Inventory -->
+            <section id="tab-inventory" class="tab-pane">
+                <div class="section-header">
+                    <h2 class="section-title">🎒 Inventory & Consumables</h2>
+                </div>
+                <div id="invGrid" class="grid-container">
+                    <!-- Dynamic Inventory items rendered via app.js -->
+                </div>
+            </section>
+
+            <!-- Tab Pane: Gear & Equipment -->
+            <section id="tab-gear" class="tab-pane">
+                <div class="section-header">
+                    <h2 class="section-title">🎣 Gear Room & Active Equipment</h2>
+                    <span style="font-size: 0.85rem; color: var(--text-muted);">Manage equipped rod, active bait, & account perks</span>
+                </div>
+                <div id="gearGrid" class="grid-container">
+                    <!-- Dynamic Gear & Account Perks rendered via app.js -->
+                </div>
+            </section>
+
+            <!-- Tab Pane: Aquarium Tank -->
+            <section id="tab-tank" class="tab-pane">
+                <div class="section-header">
+                    <h2 class="section-title">🐠 Interactive Tank Simulator</h2>
+                    <span style="font-size: 0.85rem; color: var(--text-muted);">Feeds auto-replenish every 12 hrs</span>
+                </div>
+                <div id="tankVisualizer" class="tank-visualizer">
+                    <!-- Dynamic Fish Swim Animation -->
+                </div>
+            </section>
+
+            <!-- Tab Pane: Upgrades Shop -->
+            <section id="tab-shop" class="tab-pane">
+                <div class="section-header">
+                    <h2 class="section-title">🛒 Upgrades & Equipment Shop</h2>
+                </div>
+                <div id="shopGrid" class="grid-container">
+                    <!-- Dynamic Shop items rendered via app.js -->
+                </div>
+            </section>
+
+            <!-- Tab Pane: Crafting -->
+            <section id="tab-craft" class="tab-pane">
+                <div class="section-header">
+                    <h2 class="section-title">⚒️ Bait Crafting Station</h2>
+                </div>
+                <div id="craftGrid" class="grid-container">
+                    <!-- Dynamic Crafting recipes rendered via app.js -->
+                </div>
+            </section>
+
+            <!-- Tab Pane: Leaderboards -->
+            <section id="tab-ranks" class="tab-pane">
+                <div class="section-header">
+                    <h2 class="section-title">🏆 Channel Ranks</h2>
+                </div>
+                <div id="ranksGrid">
+                    <!-- Dynamic Leaderboard rendered via app.js -->
+                </div>
+            </section>
+
+            <!-- Tab Pane: Fish Encyclopedia -->
+            <section id="tab-log" class="tab-pane">
+                <div class="section-header">
+                    <h2 class="section-title">📖 Species Log & Trash Encyclopedia</h2>
+                </div>
+                <div id="logGrid" class="grid-container">
+                    <!-- Dynamic Log items rendered via app.js -->
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+        SR Fishing RPG &copy; 2026. Built for Twitch Streamers & Viewers. Powered by GitHub Pages & Neon DB.
+    </footer>
+
+    <!-- Scripts -->
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

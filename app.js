@@ -1,0 +1,813 @@
+// SR FISHING WEB VERSION - Main Application Logic
+
+document.addEventListener('DOMContentLoaded', () => {
+    // State management
+    const state = {
+        currentUser: null,
+        twitchToken: null,
+        userProfile: null,
+        activeTab: 'net',
+        activeLogFilter: 'all',
+        syncTimer: null
+    };
+
+    // Master Catalog of 148 Species & Trash Items (derived from GAME_SPECS.md & DbInitializer.cs)
+    // Note: Trash items belong under Common rarity tier per specs (all sell flat 5g)
+    const MASTER_SPECIES_CATALOG = [
+        // TRASH (6) - Part of Common Tier
+        { name: "Rusty Can", tier: "Common", isTrash: true, basePrice: 5, asset: "assets/fish/trash/rusty_can.png", frame: "assets/frames/common_frame.png" },
+        { name: "Seaweed", tier: "Common", isTrash: true, basePrice: 5, asset: "assets/fish/trash/seaweed.png", frame: "assets/frames/common_frame.png" },
+        { name: "Glass Bottle", tier: "Common", isTrash: true, basePrice: 5, asset: "assets/fish/trash/glass_bottle.png", frame: "assets/frames/common_frame.png" },
+        { name: "Tire", tier: "Common", isTrash: true, basePrice: 5, asset: "assets/fish/trash/tire.png", frame: "assets/frames/common_frame.png" },
+        { name: "Old Boot", tier: "Common", isTrash: true, basePrice: 5, asset: "assets/fish/trash/old_boot.png", frame: "assets/frames/common_frame.png" },
+        { name: "Plastic Bag", tier: "Common", isTrash: true, basePrice: 5, asset: "assets/fish/trash/plastic_bag.png", frame: "assets/frames/common_frame.png" },
+
+        // COMMON SPECIES (30)
+        { name: "Minnow", tier: "Common", isTrash: false, basePrice: 10, asset: "assets/fish/common_fish/minnow.png", frame: "assets/frames/common_frame.png" },
+        { name: "Clam", tier: "Common", isTrash: false, basePrice: 12, asset: "assets/fish/common_fish/clam.png", frame: "assets/frames/common_frame.png" },
+        { name: "Starfish", tier: "Common", isTrash: false, basePrice: 15, asset: "assets/fish/common_fish/starfish.png", frame: "assets/frames/common_frame.png" },
+        { name: "Shrimp", tier: "Common", isTrash: false, basePrice: 18, asset: "assets/fish/common_fish/shrimp.png", frame: "assets/frames/common_frame.png" },
+        { name: "Anchovy", tier: "Common", isTrash: false, basePrice: 20, asset: "assets/fish/common_fish/anchovy.png", frame: "assets/frames/common_frame.png" },
+        { name: "Snail", tier: "Common", isTrash: false, basePrice: 22, asset: "assets/fish/common_fish/snail.png", frame: "assets/frames/common_frame.png" },
+        { name: "Hermit Crab", tier: "Common", isTrash: false, basePrice: 25, asset: "assets/fish/common_fish/hermit_crab.png", frame: "assets/frames/common_frame.png" },
+        { name: "Sardine", tier: "Common", isTrash: false, basePrice: 28, asset: "assets/fish/common_fish/sardine.png", frame: "assets/frames/common_frame.png" },
+        { name: "Goldfish", tier: "Common", isTrash: false, basePrice: 30, asset: "assets/fish/common_fish/goldfish.png", frame: "assets/frames/common_frame.png" },
+        { name: "Bluegill", tier: "Common", isTrash: false, basePrice: 35, asset: "assets/fish/common_fish/bluegill.png", frame: "assets/frames/common_frame.png" },
+        { name: "Carp", tier: "Common", isTrash: false, basePrice: 38, asset: "assets/fish/common_fish/carp.png", frame: "assets/frames/common_frame.png" },
+        { name: "Flounder", tier: "Common", isTrash: false, basePrice: 40, asset: "assets/fish/common_fish/flounder.png", frame: "assets/frames/common_frame.png" },
+        { name: "Rainbow Trout", tier: "Common", isTrash: false, basePrice: 45, asset: "assets/fish/common_fish/rainbow_trout.png", frame: "assets/frames/common_frame.png" },
+        { name: "Perch", tier: "Common", isTrash: false, basePrice: 48, asset: "assets/fish/common_fish/perch.png", frame: "assets/frames/common_frame.png" },
+        { name: "Mackerel", tier: "Common", isTrash: false, basePrice: 50, asset: "assets/fish/common_fish/mackerel.png", frame: "assets/frames/common_frame.png" },
+        { name: "Catfish", tier: "Common", isTrash: false, basePrice: 55, asset: "assets/fish/common_fish/catfish.png", frame: "assets/frames/common_frame.png" },
+        { name: "Whitefish", tier: "Common", isTrash: false, basePrice: 58, asset: "assets/fish/common_fish/whitefish.png", frame: "assets/frames/common_frame.png" },
+        { name: "Tadpole", tier: "Common", isTrash: false, basePrice: 60, asset: "assets/fish/common_fish/tadpole.png", frame: "assets/frames/common_frame.png" },
+        { name: "Frog", tier: "Common", isTrash: false, basePrice: 65, asset: "assets/fish/common_fish/frog.png", frame: "assets/frames/common_frame.png" },
+        { name: "Shinner", tier: "Common", isTrash: false, basePrice: 68, asset: "assets/fish/common_fish/shinner.png", frame: "assets/frames/common_frame.png" },
+        { name: "Bullfrog", tier: "Common", isTrash: false, basePrice: 70, asset: "assets/fish/common_fish/bullfrog.png", frame: "assets/frames/common_frame.png" },
+        { name: "Bullhead Catfish", tier: "Common", isTrash: false, basePrice: 75, asset: "assets/fish/common_fish/bullhead_catfish.png", frame: "assets/frames/common_frame.png" },
+        { name: "Brown Trout", tier: "Common", isTrash: false, basePrice: 78, asset: "assets/fish/common_fish/brown_trout.png", frame: "assets/frames/common_frame.png" },
+        { name: "Goblin Perch", tier: "Common", isTrash: false, basePrice: 80, asset: "assets/fish/common_fish/goblin_perch.png", frame: "assets/frames/common_frame.png" },
+        { name: "Oyster", tier: "Common", isTrash: false, basePrice: 85, asset: "assets/fish/common_fish/oyster.png", frame: "assets/frames/common_frame.png" },
+        { name: "Mussel", tier: "Common", isTrash: false, basePrice: 88, asset: "assets/fish/common_fish/mussel.png", frame: "assets/frames/common_frame.png" },
+        { name: "Guppy", tier: "Common", isTrash: false, basePrice: 90, asset: "assets/fish/common_fish/guppy.png", frame: "assets/frames/common_frame.png" },
+        { name: "Herring", tier: "Common", isTrash: false, basePrice: 92, asset: "assets/fish/common_fish/herring.png", frame: "assets/frames/common_frame.png" },
+        { name: "Smelt", tier: "Common", isTrash: false, basePrice: 95, asset: "assets/fish/common_fish/smelt.png", frame: "assets/frames/common_frame.png" },
+        { name: "Crawdad", tier: "Common", isTrash: false, basePrice: 100, asset: "assets/fish/common_fish/crawdad.png", frame: "assets/frames/common_frame.png" },
+
+        // UNCOMMON SPECIES (28)
+        { name: "Largemouth Bass", tier: "Uncommon", isTrash: false, basePrice: 60, asset: "assets/fish/uncommon_fish/largemouth_bass.png", frame: "assets/frames/uncommon_frame.png" },
+        { name: "Smallmouth Bass", tier: "Uncommon", isTrash: false, basePrice: 80, asset: "assets/fish/uncommon_fish/smallmouth_bass.png", frame: "assets/frames/uncommon_frame.png" },
+        { name: "Salmon", tier: "Uncommon", isTrash: false, basePrice: 120, asset: "assets/fish/uncommon_fish/salmon.png", frame: "assets/frames/uncommon_frame.png" },
+        { name: "Northern Pike", tier: "Uncommon", isTrash: false, basePrice: 160, asset: "assets/fish/uncommon_fish/northern_pike.png", frame: "assets/frames/uncommon_frame.png" },
+        { name: "Electric Eel", tier: "Uncommon", isTrash: false, basePrice: 200, asset: "assets/fish/uncommon_fish/electric_eel.png", frame: "assets/frames/uncommon_frame.png" },
+        { name: "Red Snapper", tier: "Uncommon", isTrash: false, basePrice: 240, asset: "assets/fish/uncommon_fish/red_snapper.png", frame: "assets/frames/uncommon_frame.png" },
+        { name: "Sea Horse", tier: "Uncommon", isTrash: false, basePrice: 280, asset: "assets/fish/uncommon_fish/sea_horse.png", frame: "assets/frames/uncommon_frame.png" },
+        { name: "King Crab", tier: "Uncommon", isTrash: false, basePrice: 320, asset: "assets/fish/uncommon_fish/king_crab.png", frame: "assets/frames/uncommon_frame.png" },
+        { name: "Jellyfish", tier: "Uncommon", isTrash: false, basePrice: 360, asset: "assets/fish/uncommon_fish/jellyfish.png", frame: "assets/frames/uncommon_frame.png" },
+        { name: "Lobster", tier: "Uncommon", isTrash: false, basePrice: 400, asset: "assets/fish/uncommon_fish/lobster.png", frame: "assets/frames/uncommon_frame.png" },
+        { name: "Barracuda", tier: "Uncommon", isTrash: false, basePrice: 440, asset: "assets/fish/uncommon_fish/barracuda.png", frame: "assets/frames/uncommon_frame.png" },
+        { name: "Pufferfish", tier: "Uncommon", isTrash: false, basePrice: 480, asset: "assets/fish/uncommon_fish/pufferfish.png", frame: "assets/frames/uncommon_frame.png" },
+        { name: "Clownfish", tier: "Uncommon", isTrash: false, basePrice: 520, asset: "assets/fish/uncommon_fish/clownfish.png", frame: "assets/frames/uncommon_frame.png" },
+        { name: "Yellow Tang", tier: "Uncommon", isTrash: false, basePrice: 560, asset: "assets/fish/uncommon_fish/yellow_tang.png", frame: "assets/frames/uncommon_frame.png" },
+        { name: "Stingray", tier: "Uncommon", isTrash: false, basePrice: 600, asset: "assets/fish/uncommon_fish/stingray.png", frame: "assets/frames/uncommon_frame.png" },
+        { name: "Sea Urchin", tier: "Uncommon", isTrash: false, basePrice: 640, asset: "assets/fish/uncommon_fish/sea_urchin.png", frame: "assets/frames/uncommon_frame.png" },
+        { name: "Chicken Fish", tier: "Uncommon", isTrash: false, basePrice: 680, asset: "assets/fish/uncommon_fish/chicken_fish.png", frame: "assets/frames/uncommon_frame.png" },
+        { name: "Suckerfish", tier: "Uncommon", isTrash: false, basePrice: 720, asset: "assets/fish/uncommon_fish/suckerfish.png", frame: "assets/frames/uncommon_frame.png" },
+        { name: "Tiger Grouper", tier: "Uncommon", isTrash: false, basePrice: 760, asset: "assets/fish/uncommon_fish/tiger_grouper.png", frame: "assets/frames/uncommon_frame.png" },
+        { name: "Trigger Fish", tier: "Uncommon", isTrash: false, basePrice: 800, asset: "assets/fish/uncommon_fish/trigger_fish.png", frame: "assets/frames/uncommon_frame.png" },
+        { name: "Parrotfish", tier: "Uncommon", isTrash: false, basePrice: 840, asset: "assets/fish/uncommon_fish/parrot_fish.png", frame: "assets/frames/uncommon_frame.png" },
+        { name: "Angelfish", tier: "Uncommon", isTrash: false, basePrice: 880, asset: "assets/fish/uncommon_fish/angelfish.png", frame: "assets/frames/uncommon_frame.png" },
+        { name: "Marlin", tier: "Uncommon", isTrash: false, basePrice: 920, asset: "assets/fish/uncommon_fish/marlin.png", frame: "assets/frames/uncommon_frame.png" },
+        { name: "Goblin Shark", tier: "Uncommon", isTrash: false, basePrice: 960, asset: "assets/fish/uncommon_fish/goblin_shark.png", frame: "assets/frames/uncommon_frame.png" },
+        { name: "Thornback Ray", tier: "Uncommon", isTrash: false, basePrice: 1000, asset: "assets/fish/uncommon_fish/thornback_ray.png", frame: "assets/frames/uncommon_frame.png" },
+        { name: "Cuttlefish", tier: "Uncommon", isTrash: false, basePrice: 1040, asset: "assets/fish/uncommon_fish/cuttlefish.png", frame: "assets/frames/uncommon_frame.png" },
+        { name: "Sawfish", tier: "Uncommon", isTrash: false, basePrice: 1080, asset: "assets/fish/uncommon_fish/sawfish.png", frame: "assets/frames/uncommon_frame.png" },
+        { name: "Flying Fish", tier: "Uncommon", isTrash: false, basePrice: 1115, asset: "assets/fish/uncommon_fish/flying_fish.png", frame: "assets/frames/uncommon_frame.png" },
+
+        // RARE SPECIES (32)
+        { name: "Shark", tier: "Rare", isTrash: false, basePrice: 600, asset: "assets/fish/rare/shark.png", frame: "assets/frames/rare_frame.png" },
+        { name: "Whale", tier: "Rare", isTrash: false, basePrice: 750, asset: "assets/fish/rare/whale.png", frame: "assets/frames/rare_frame.png" },
+        { name: "Octopus", tier: "Rare", isTrash: false, basePrice: 900, asset: "assets/fish/rare/octopus.png", frame: "assets/frames/rare_frame.png" },
+        { name: "Dolphin", tier: "Rare", isTrash: false, basePrice: 1050, asset: "assets/fish/rare/dolphin.png", frame: "assets/frames/rare_frame.png" },
+        { name: "Sea Turtle", tier: "Rare", isTrash: false, basePrice: 1200, asset: "assets/fish/rare/sea_turtle.png", frame: "assets/frames/rare_frame.png" },
+        { name: "MMF Chickenfish", tier: "Rare", isTrash: false, basePrice: 1350, asset: "assets/fish/rare/mmf_chickenfish.png", frame: "assets/frames/rare_frame.png" },
+        { name: "Lionfish", tier: "Rare", isTrash: false, basePrice: 1500, asset: "assets/fish/rare/lionfish.png", frame: "assets/frames/rare_frame.png" },
+        { name: "Piranha", tier: "Rare", isTrash: false, basePrice: 1650, asset: "assets/fish/rare/piranha.png", frame: "assets/frames/rare_frame.png" },
+        { name: "Swordfish", tier: "Rare", isTrash: false, basePrice: 1800, asset: "assets/fish/rare/swordfish.png", frame: "assets/frames/rare_frame.png" },
+        { name: "Sturgeon", tier: "Rare", isTrash: false, basePrice: 1950, asset: "assets/fish/rare/sturgeon.png", frame: "assets/frames/rare_frame.png" },
+        { name: "Dwarf Anglerfish", tier: "Rare", isTrash: false, basePrice: 2100, asset: "assets/fish/rare/dwarf_anglershark.png", frame: "assets/frames/rare_frame.png" },
+        { name: "Dwarf Lanternshark", tier: "Rare", isTrash: false, basePrice: 2250, asset: "assets/fish/rare/dwarf_lanternfish.png", frame: "assets/frames/rare_frame.png" },
+        { name: "Blobfish", tier: "Rare", isTrash: false, basePrice: 2400, asset: "assets/fish/rare/blobfish.png", frame: "assets/frames/rare_frame.png" },
+        { name: "Ocean Sunfish", tier: "Rare", isTrash: false, basePrice: 2550, asset: "assets/fish/rare/ocean_sunfish.png", frame: "assets/frames/rare_frame.png" },
+        { name: "Oarfish", tier: "Rare", isTrash: false, basePrice: 2700, asset: "assets/fish/rare/oarfish.png", frame: "assets/frames/rare_frame.png" },
+        { name: "Dragonfish", tier: "Rare", isTrash: false, basePrice: 2850, asset: "assets/fish/rare/dragonfish.png", frame: "assets/frames/rare_frame.png" },
+        { name: "Mantis Shrimp", tier: "Rare", isTrash: false, basePrice: 3000, asset: "assets/fish/rare/mantis_shrimp.png", frame: "assets/frames/rare_frame.png" },
+        { name: "Coelacanth", tier: "Rare", isTrash: false, basePrice: 3150, asset: "assets/fish/rare/coelacanth.png", frame: "assets/frames/rare_frame.png" },
+        { name: "Giant Grouper", tier: "Rare", isTrash: false, basePrice: 3300, asset: "assets/fish/rare/giant_grouper.png", frame: "assets/frames/rare_frame.png" },
+        { name: "Electric Jellyfish", tier: "Rare", isTrash: false, basePrice: 3450, asset: "assets/fish/rare/electric_jellyfish.png", frame: "assets/frames/rare_frame.png" },
+        { name: "Giant Clam", tier: "Rare", isTrash: false, basePrice: 3600, asset: "assets/fish/rare/giant_clam.png", frame: "assets/frames/rare_frame.png" },
+        { name: "Giant Squid", tier: "Rare", isTrash: false, basePrice: 3750, asset: "assets/fish/rare/giant_catfish.png", frame: "assets/frames/rare_frame.png" },
+        { name: "Giant Salamander", tier: "Rare", isTrash: false, basePrice: 3900, asset: "assets/fish/rare/giant_salamander.png", frame: "assets/frames/rare_frame.png" },
+        { name: "Narwhal", tier: "Rare", isTrash: false, basePrice: 4050, asset: "assets/fish/rare/narwhal.png", frame: "assets/frames/rare_frame.png" },
+        { name: "Shiny Sawfish", tier: "Rare", isTrash: false, basePrice: 4200, asset: "assets/fish/rare/shiny_sawfish.png", frame: "assets/frames/rare_frame.png" },
+        { name: "Bluefin Tuna", tier: "Rare", isTrash: false, basePrice: 4350, asset: "assets/fish/rare/bluefin_tuna.png", frame: "assets/frames/rare_frame.png" },
+        { name: "Hammerhead Shark", tier: "Rare", isTrash: false, basePrice: 4500, asset: "assets/fish/rare/hammerhead_shark.png", frame: "assets/frames/rare_frame.png" },
+        { name: "Orca", tier: "Rare", isTrash: false, basePrice: 4650, asset: "assets/fish/rare/orca.png", frame: "assets/frames/rare_frame.png" },
+        { name: "Giant Catfish", tier: "Rare", isTrash: false, basePrice: 4800, asset: "assets/fish/rare/giant_catfish.png", frame: "assets/frames/rare_frame.png" },
+        { name: "Golden Mantis Shrimp", tier: "Rare", isTrash: false, basePrice: 4900, asset: "assets/fish/rare/golden_mantis_shrimp.png", frame: "assets/frames/rare_frame.png" },
+        { name: "Viper Fish", tier: "Rare", isTrash: false, basePrice: 4950, asset: "assets/fish/rare/viper_fish.png", frame: "assets/frames/rare_frame.png" },
+        { name: "Gulper Eel", tier: "Rare", isTrash: false, basePrice: 4999, asset: "assets/fish/rare/gulper_eel.png", frame: "assets/frames/rare_frame.png" },
+
+        // LEGENDARY SPECIES (26)
+        { name: "Kraken Hatchling", tier: "Legendary", isTrash: false, basePrice: 3500, asset: "assets/fish/legendary/kraken_hatchling.png", frame: "assets/frames/legendary_frame.png" },
+        { name: "Megalodon", tier: "Legendary", isTrash: false, basePrice: 4200, asset: "assets/fish/legendary/megalodon.png", frame: "assets/frames/legendary_frame.png" },
+        { name: "SteveRoars SpaghettiFish", tier: "Legendary", isTrash: false, basePrice: 5000, asset: "assets/fish/legendary/steveroars_spaghetifish.png", frame: "assets/frames/legendary_frame.png" },
+        { name: "Hydra Fry", tier: "Legendary", isTrash: false, basePrice: 5800, asset: "assets/fish/legendary/hydra_fry.png", frame: "assets/frames/legendary_frame.png" },
+        { name: "Kraken Spawn", tier: "Legendary", isTrash: false, basePrice: 6600, asset: "assets/fish/legendary/kraken_spawn.png", frame: "assets/frames/legendary_frame.png" },
+        { name: "Dunkleosteus", tier: "Legendary", isTrash: false, basePrice: 7400, asset: "assets/fish/legendary/dunkleosteus.png", frame: "assets/frames/legendary_frame.png" },
+        { name: "Golden Carp", tier: "Legendary", isTrash: false, basePrice: 8200, asset: "assets/fish/legendary/golden_carp.png", frame: "assets/frames/legendary_frame.png" },
+        { name: "Deep Sea Angler", tier: "Legendary", isTrash: false, basePrice: 9000, asset: "assets/fish/legendary/deep_sea_angler.png", frame: "assets/frames/legendary_frame.png" },
+        { name: "Giant Regal Oarfish", tier: "Legendary", isTrash: false, basePrice: 9800, asset: "assets/fish/legendary/giant_regal_oarfish.png", frame: "assets/frames/legendary_frame.png" },
+        { name: "Colossal Squid", tier: "Legendary", isTrash: false, basePrice: 10600, asset: "assets/fish/legendary/colossal_squid.png", frame: "assets/frames/legendary_frame.png" },
+        { name: "Phantom Ray", tier: "Legendary", isTrash: false, basePrice: 11400, asset: "assets/fish/legendary/phantom_ray.png", frame: "assets/frames/legendary_frame.png" },
+        { name: "Golden Dragonfish", tier: "Legendary", isTrash: false, basePrice: 12200, asset: "assets/fish/legendary/golden_dragonfish.png", frame: "assets/frames/legendary_frame.png" },
+        { name: "Blue Whale", tier: "Legendary", isTrash: false, basePrice: 13000, asset: "assets/fish/legendary/blue_whale.png", frame: "assets/frames/legendary_frame.png" },
+        { name: "Leviathan Calf", tier: "Legendary", isTrash: false, basePrice: 13800, asset: "assets/fish/legendary/leviathan_calf.png", frame: "assets/frames/legendary_frame.png" },
+        { name: "Titan Turtle", tier: "Legendary", isTrash: false, basePrice: 14600, asset: "assets/fish/legendary/titan_turtle.png", frame: "assets/frames/legendary_frame.png" },
+        { name: "Golden Abyssal Eel", tier: "Legendary", isTrash: false, basePrice: 15400, asset: "assets/fish/legendary/golden_abyssal_eel.png", frame: "assets/frames/legendary_frame.png" },
+        { name: "Shadow Leviathan", tier: "Legendary", isTrash: false, basePrice: 16200, asset: "assets/fish/legendary/shadow_leviathan.png", frame: "assets/frames/legendary_frame.png" },
+        { name: "Golden Jellyfish", tier: "Legendary", isTrash: false, basePrice: 17000, asset: "assets/fish/legendary/golden_jellyfish.png", frame: "assets/frames/legendary_frame.png" },
+        { name: "Titan Jellyfish", tier: "Legendary", isTrash: false, basePrice: 17800, asset: "assets/fish/legendary/titan_jellyfish.png", frame: "assets/frames/legendary_frame.png" },
+        { name: "Golden Whale Shark", tier: "Legendary", isTrash: false, basePrice: 18600, asset: "assets/fish/legendary/golden_whale_shark.png", frame: "assets/frames/legendary_frame.png" },
+        { name: "Golden Sea Urchin", tier: "Legendary", isTrash: false, basePrice: 19400, asset: "assets/fish/legendary/golden_sea_urchin.png", frame: "assets/frames/legendary_frame.png" },
+        { name: "Golden King Crab", tier: "Legendary", isTrash: false, basePrice: 20200, asset: "assets/fish/legendary/golden_king_crab.png", frame: "assets/frames/legendary_frame.png" },
+        { name: "Rainbow Manta Ray", tier: "Legendary", isTrash: false, basePrice: 21000, asset: "assets/fish/legendary/rainbow_manta_ray.png", frame: "assets/frames/legendary_frame.png" },
+        { name: "Giant Octopus", tier: "Legendary", isTrash: false, basePrice: 21800, asset: "assets/fish/legendary/giant_octopus.png", frame: "assets/frames/legendary_frame.png" },
+        { name: "Sea Serpent", tier: "Legendary", isTrash: false, basePrice: 22600, asset: "assets/fish/legendary/sea_serpent.png", frame: "assets/frames/legendary_frame.png" },
+        { name: "Sunken Treasure", tier: "Legendary", isTrash: false, basePrice: 23575, asset: "assets/fish/legendary/sunken_treasure.png", frame: "assets/frames/legendary_frame.png" },
+
+        // MYTHICAL SPECIES (22)
+        { name: "Ghost Leviathan", tier: "Mythical", isTrash: false, basePrice: 6000, asset: "assets/fish/mythical/ghost_leviathan.png", frame: "assets/frames/mythical_frame.png" },
+        { name: "Cosmic Whale", tier: "Mythical", isTrash: false, basePrice: 8000, asset: "assets/fish/mythical/cosmic_whale.png", frame: "assets/frames/mythical_frame.png" },
+        { name: "Celestial Serpent", tier: "Mythical", isTrash: false, basePrice: 10000, asset: "assets/fish/mythical/celestial_serpent.png", frame: "assets/frames/mythical_frame.png" },
+        { name: "Abyssal Dragon", tier: "Mythical", isTrash: false, basePrice: 12000, asset: "assets/fish/mythical/abyssal_dragon.png", frame: "assets/frames/mythical_frame.png" },
+        { name: "Rainbow Phoenix Fish", tier: "Mythical", isTrash: false, basePrice: 14000, asset: "assets/fish/mythical/rainbow_phoenix_fish.png", frame: "assets/frames/mythical_frame.png" },
+        { name: "Ethereal Kraken", tier: "Mythical", isTrash: false, basePrice: 16000, asset: "assets/fish/mythical/ethereal_kraken.png", frame: "assets/frames/mythical_frame.png" },
+        { name: "Solar Dolphin", tier: "Mythical", isTrash: false, basePrice: 18000, asset: "assets/fish/mythical/solar_dolphin.png", frame: "assets/frames/mythical_frame.png" },
+        { name: "Lunar Shark", tier: "Mythical", isTrash: false, basePrice: 20000, asset: "assets/fish/mythical/lunar_shark.png", frame: "assets/frames/mythical_frame.png" },
+        { name: "Galactic Jellyfish", tier: "Mythical", isTrash: false, basePrice: 22000, asset: "assets/fish/mythical/galactic_jellyfish.png", frame: "assets/frames/mythical_frame.png" },
+        { name: "Quantum Turtle", tier: "Mythical", isTrash: false, basePrice: 24000, asset: "assets/fish/mythical/quantum_turtle.png", frame: "assets/frames/mythical_frame.png" },
+        { name: "Starlight Ray", tier: "Mythical", isTrash: false, basePrice: 26000, asset: "assets/fish/mythical/starlight_ray.png", frame: "assets/frames/mythical_frame.png" },
+        { name: "Void Octopus", tier: "Mythical", isTrash: false, basePrice: 28000, asset: "assets/fish/mythical/void_octopus.png", frame: "assets/frames/mythical_frame.png" },
+        { name: "Rainbow Sea Serpent", tier: "Mythical", isTrash: false, basePrice: 30000, asset: "assets/fish/mythical/rainbow_sea_serpent.png", frame: "assets/frames/mythical_frame.png" },
+        { name: "Ethereal Fish", tier: "Mythical", isTrash: false, basePrice: 32000, asset: "assets/fish/mythical/ethereal_fish.png", frame: "assets/frames/mythical_frame.png" },
+        { name: "Glowing Abyssal Leviathan", tier: "Mythical", isTrash: false, basePrice: 34000, asset: "assets/fish/mythical/glowing_abyssal_leviathan.png", frame: "assets/frames/mythical_frame.png" },
+        { name: "Phoenix Koi", tier: "Mythical", isTrash: false, basePrice: 36000, asset: "assets/fish/mythical/phoenix_koi.png", frame: "assets/frames/mythical_frame.png" },
+        { name: "Cthulhu Spore", tier: "Mythical", isTrash: false, basePrice: 38000, asset: "assets/fish/mythical/cthulhu_spore.png", frame: "assets/frames/mythical_frame.png" },
+        { name: "Abyssal Octopus", tier: "Mythical", isTrash: false, basePrice: 40000, asset: "assets/fish/mythical/abyssal_octopus.png", frame: "assets/frames/mythical_frame.png" },
+        { name: "Shadow Dragon", tier: "Mythical", isTrash: false, basePrice: 41500, asset: "assets/fish/mythical/shadow_dragon.png", frame: "assets/frames/mythical_frame.png" },
+        { name: "Phantom Shark", tier: "Mythical", isTrash: false, basePrice: 43000, asset: "assets/fish/mythical/phantom_shark.png", frame: "assets/frames/mythical_frame.png" },
+        { name: "Abyssal Kraken", tier: "Mythical", isTrash: false, basePrice: 44000, asset: "assets/fish/mythical/abyssal_kraken.png", frame: "assets/frames/mythical_frame.png" },
+        { name: "Galactic Angler", tier: "Mythical", isTrash: false, basePrice: 45000, asset: "assets/fish/mythical/galactic_angler.png", frame: "assets/frames/mythical_frame.png" },
+
+        // DIVINE SPECIES (5)
+        { name: "Trident Kraken", tier: "Divine", isTrash: false, basePrice: 50000, asset: "assets/fish/divine/trident_kraken.png", frame: "assets/frames/divine_frame.png" },
+        { name: "Rainbow MMF Chickenfish", tier: "Divine", isTrash: false, basePrice: 55000, asset: "assets/fish/divine/rainbow_mmf_chickenfish.png", frame: "assets/frames/divine_frame.png" },
+        { name: "Spectral Icefish", tier: "Divine", isTrash: false, basePrice: 60000, asset: "assets/fish/divine/spectral_icefish.png", frame: "assets/frames/divine_frame.png" },
+        { name: "Mermaid", tier: "Divine", isTrash: false, basePrice: 65000, asset: "assets/fish/divine/mermaid.png", frame: "assets/frames/divine_frame.png" },
+        { name: "SteveRoars Hatchling", tier: "Divine", isTrash: false, basePrice: 69075, asset: "assets/fish/divine/steveraors_hatchling.png", frame: "assets/frames/divine_frame.png" }
+    ];
+
+    // Initialize App
+    init();
+
+    function init() {
+        checkTwitchOAuthHash();
+        setupNavigation();
+        setupEventListeners();
+        loadSavedUserSession();
+        
+        if (state.currentUser) {
+            fetchUserProfile();
+            startAutoSync();
+        } else {
+            renderLoggedOutState();
+        }
+    }
+
+    // 1. Twitch OAuth Implicit Grant handling
+    function checkTwitchOAuthHash() {
+        const hash = window.location.hash.substring(1);
+        if (!hash) return;
+
+        const params = new URLSearchParams(hash);
+        const accessToken = params.get('access_token');
+
+        if (accessToken) {
+            state.twitchToken = accessToken;
+            localStorage.setItem('sr_twitch_token', accessToken);
+            history.pushState("", document.title, window.location.pathname + window.location.search);
+            fetchTwitchUserInfo(accessToken);
+        }
+    }
+
+    async function fetchTwitchUserInfo(token) {
+        try {
+            const res = await fetch('https://api.twitch.tv/helix/users', {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Client-ID': window.CONFIG.TWITCH_CLIENT_ID
+                }
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                if (data.data && data.data.length > 0) {
+                    const twitchUser = data.data[0];
+                    state.currentUser = {
+                        id: twitchUser.id,
+                        username: twitchUser.login,
+                        displayName: twitchUser.display_name,
+                        profileImage: twitchUser.profile_image_url
+                    };
+                    localStorage.setItem('sr_user_session', JSON.stringify(state.currentUser));
+                    updateUserHeaderUI();
+                    fetchUserProfile();
+                }
+            }
+        } catch (err) {
+            console.error('Error contacting Twitch API:', err);
+        }
+    }
+
+    function loadSavedUserSession() {
+        const savedSession = localStorage.getItem('sr_user_session');
+        const savedToken = localStorage.getItem('sr_twitch_token');
+        if (savedSession) {
+            state.currentUser = JSON.parse(savedSession);
+            state.twitchToken = savedToken;
+            updateUserHeaderUI();
+        }
+    }
+
+    function loginWithTwitch() {
+        if (!window.CONFIG.TWITCH_CLIENT_ID || window.CONFIG.TWITCH_CLIENT_ID === "YOUR_TWITCH_CLIENT_ID") {
+            alert("Twitch Client ID is not configured yet! Please update config.js with your Twitch Dev Client ID.");
+            return;
+        }
+
+        const authUrl = `https://id.twitch.tv/oauth2/authorize` +
+            `?client_id=${encodeURIComponent(window.CONFIG.TWITCH_CLIENT_ID)}` +
+            `&redirect_uri=${encodeURIComponent(window.CONFIG.REDIRECT_URI)}` +
+            `&response_type=token` +
+            `&scope=user:read:email`;
+
+        window.location.href = authUrl;
+    }
+
+    function logoutUser() {
+        state.currentUser = null;
+        state.twitchToken = null;
+        state.userProfile = null;
+        localStorage.removeItem('sr_user_session');
+        localStorage.removeItem('sr_twitch_token');
+        if (state.syncTimer) clearInterval(state.syncTimer);
+        renderLoggedOutState();
+    }
+
+    // 2. Fetch Profile from JRMA Backend API
+    async function fetchUserProfile() {
+        if (!state.currentUser) return;
+
+        try {
+            const url = `${window.CONFIG.API_BASE_URL}/api/User/${state.currentUser.id}?username=${encodeURIComponent(state.currentUser.username)}`;
+            const res = await fetch(url);
+
+            if (res.ok) {
+                const data = await res.json();
+                state.userProfile = data;
+                renderProfileData();
+            } else {
+                renderFallbackProfileData();
+            }
+        } catch (err) {
+            renderFallbackProfileData();
+        }
+    }
+
+    function renderFallbackProfileData() {
+        state.userProfile = {
+            id: state.currentUser ? state.currentUser.id : "viewer_demo",
+            username: state.currentUser ? state.currentUser.displayName : "ViewerDemo",
+            gold: 35000,
+            activeRod: "Default Rod",
+            tankCapacity: 3,
+            hasAutoFeeder: false,
+            hasDeepFreezer: true,
+            hasFishingVessel: false,
+            hasFishingNet: true,
+            cooldownTotalSeconds: 900,
+            remainingCooldownSeconds: 320,
+            netCatches: [
+                { id: 1, species: { name: "Rainbow Trout", rarity: "Common", iconUrl: "assets/fish/common_fish/rainbow_trout.png" }, weight: 3.4 },
+                { id: 2, species: { name: "Largemouth Bass", rarity: "Uncommon", iconUrl: "assets/fish/uncommon_fish/largemouth_bass.png" }, weight: 8.2 },
+                { id: 3, species: { name: "Minnow", rarity: "Common", iconUrl: "assets/fish/common_fish/minnow.png" }, weight: 0.2 },
+                { id: 4, species: { name: "Bluegill", rarity: "Common", iconUrl: "assets/fish/common_fish/bluegill.png" }, weight: 1.1 }
+            ],
+            inventoryItems: [
+                { itemName: "Standard Bait", quantity: 4 },
+                { itemName: "Super Bait", quantity: 2 },
+                { itemName: "Common & Uncommon Recovery Med", quantity: 3 }
+            ],
+            tankFish: [
+                { id: 101, nickname: "Goldie", currentHp: 100, maxHp: 100, species: { name: "Golden Carp", rarity: "Legendary" } }
+            ],
+            caughtStats: {
+                "rainbow trout": { timesCaught: 5, heaviestWeight: 4.8 },
+                "largemouth bass": { timesCaught: 2, heaviestWeight: 12.4 },
+                "golden carp": { timesCaught: 1, heaviestWeight: 2450.0 },
+                "minnow": { timesCaught: 8, heaviestWeight: 0.4 },
+                "rusty can": { timesCaught: 3, heaviestWeight: 0.8 }
+            }
+        };
+        renderProfileData();
+    }
+
+    function renderProfileData() {
+        if (!state.userProfile) return;
+
+        // Header Gold
+        const goldEl = document.getElementById('userGoldVal');
+        if (goldEl) goldEl.textContent = state.userProfile.gold.toLocaleString();
+
+        // Hero Stats
+        const statGold = document.getElementById('statGold');
+        if (statGold) statGold.textContent = state.userProfile.gold.toLocaleString();
+
+        const statCatches = document.getElementById('statCatches');
+        if (statCatches) statCatches.textContent = state.userProfile.netCatches ? state.userProfile.netCatches.length : 0;
+
+        const statRod = document.getElementById('statRod');
+        if (statRod) statRod.textContent = state.userProfile.activeRod || "Default Rod";
+
+        // Cooldown timer
+        updateCooldownUI(state.userProfile.remainingCooldownSeconds || 0);
+
+        // Render Active Tab
+        renderCurrentTabContent();
+    }
+
+    function updateCooldownUI(secondsRemaining) {
+        const timerEl = document.getElementById('cooldownTimerVal');
+        if (!timerEl) return;
+
+        if (secondsRemaining <= 0) {
+            timerEl.textContent = "READY TO FISH!";
+            timerEl.style.color = "var(--accent-emerald)";
+        } else {
+            const mins = Math.floor(secondsRemaining / 60);
+            const secs = Math.floor(secondsRemaining % 60);
+            timerEl.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            timerEl.style.color = "var(--accent-cyan)";
+        }
+    }
+
+    // 3. Navigation & Tab Switcher
+    function setupNavigation() {
+        const navItems = document.querySelectorAll('.nav-item');
+        navItems.forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                const targetTab = item.getAttribute('data-tab');
+                switchTab(targetTab);
+            });
+        });
+    }
+
+    function switchTab(tabId) {
+        state.activeTab = tabId;
+        
+        document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+        const activeNav = document.querySelector(`.nav-item[data-tab="${tabId}"]`);
+        if (activeNav) activeNav.classList.add('active');
+
+        document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+        const activePane = document.getElementById(`tab-${tabId}`);
+        if (activePane) activePane.classList.add('active');
+
+        renderCurrentTabContent();
+    }
+
+    function renderCurrentTabContent() {
+        switch (state.activeTab) {
+            case 'net':
+                renderNetTab();
+                break;
+            case 'inventory':
+                renderInventoryTab();
+                break;
+            case 'gear':
+                renderGearTab();
+                break;
+            case 'tank':
+                renderTankTab();
+                break;
+            case 'shop':
+                renderShopTab();
+                break;
+            case 'craft':
+                renderCraftTab();
+                break;
+            case 'ranks':
+                renderRanksTab();
+                break;
+            case 'log':
+                renderLogTab();
+                break;
+        }
+    }
+
+    // 4. Tab Renderers
+    function renderNetTab() {
+        const netGrid = document.getElementById('netGrid');
+        if (!netGrid) return;
+
+        const catches = state.userProfile ? (state.userProfile.netCatches || []) : [];
+        const hasFreezer = state.userProfile && state.userProfile.hasDeepFreezer;
+
+        if (catches.length === 0) {
+            netGrid.innerHTML = `<div style="grid-column: 1/-1; text-align:center; padding: 40px; color: var(--text-muted);">Your fishing net is currently empty! Use <b>!fish</b> in Twitch chat to make catches.</div>`;
+            return;
+        }
+
+        const decayNoticeHtml = hasFreezer 
+            ? `<div style="grid-column: 1/-1; font-size:0.85rem; color:var(--accent-cyan); background:rgba(0,229,255,0.08); border:1px solid rgba(0,229,255,0.25); padding:10px 16px; border-radius:var(--radius-md); text-align:center;">🧊 <b>Deep Freezer Active:</b> Catches in your Net stay 100% fresh for 3 days (72h) before standard decay applies!</div>`
+            : `<div style="grid-column: 1/-1; font-size:0.85rem; color:var(--accent-gold); background:rgba(255,183,3,0.08); border:1px solid rgba(255,183,3,0.25); padding:10px 16px; border-radius:var(--radius-md); text-align:center;">⏱️ <b>Decay Timer Notice:</b> Unpreserved catches decay in value after 24 hours (50% @ 24h, 40% @ 48h, 30% @ 72h, 25% floor). Purchase the <i>Deep Freezer</i> to keep catches 100% fresh for 3 days!</div>`;
+
+        const cardsHtml = catches.map(item => `
+            <div class="item-card">
+                <span class="item-badge rarity-${(item.species.rarity || 'common').toLowerCase()}">${item.species.rarity || 'Common'}</span>
+                <img src="${item.species.iconUrl || 'assets/Icons/sr.png'}" class="item-img" alt="${item.species.name}">
+                <div class="item-name">${item.species.name}</div>
+                <div class="item-desc">
+                    Weight: ${item.weight ? item.weight.toFixed(2) + ' lbs' : '1.0 lbs'}<br>
+                    <span style="color:${hasFreezer ? 'var(--accent-emerald)' : 'var(--accent-gold)'}; font-size:0.78rem;">
+                        ${hasFreezer ? '🧊 Preserved (3 Days Fresh)' : '⏱️ Fresh (Decays in 24h)'}
+                    </span>
+                </div>
+                <button class="btn-action btn-gold" onclick="sellFish(${item.id})">Sell for Gold</button>
+            </div>
+        `).join('');
+
+        netGrid.innerHTML = decayNoticeHtml + cardsHtml;
+    }
+
+    function renderInventoryTab() {
+        const invGrid = document.getElementById('invGrid');
+        if (!invGrid) return;
+
+        const items = state.userProfile ? (state.userProfile.inventoryItems || []) : [];
+        if (items.length === 0) {
+            invGrid.innerHTML = `<div style="grid-column: 1/-1; text-align:center; padding: 40px; color: var(--text-muted);">Your inventory is empty! Purchase consumables from the Shop or craft baits.</div>`;
+            return;
+        }
+
+        invGrid.innerHTML = items.map(item => `
+            <div class="item-card">
+                <img src="assets/baits/standard_bait.png" class="item-img" alt="${item.itemName}">
+                <div class="item-name">${item.itemName}</div>
+                <div class="item-desc">Quantity: ${item.quantity}</div>
+                <button class="btn-action">Equip / Use</button>
+            </div>
+        `).join('');
+    }
+
+    function renderGearTab() {
+        const gearGrid = document.getElementById('gearGrid');
+        if (!gearGrid) return;
+
+        const profile = state.userProfile || {};
+        const activeRod = profile.activeRod || "Default Rod";
+
+        gearGrid.innerHTML = `
+            <div class="item-card">
+                <span class="item-badge rarity-legendary">EQUIPPED ROD</span>
+                <img src="assets/Icons/default_rod.png" class="item-img" alt="Equipped Rod">
+                <div class="item-name">${activeRod}</div>
+                <div class="item-desc">Active Rod equipped for !fish casts.</div>
+            </div>
+            <div class="item-card">
+                <span class="item-badge rarity-${profile.hasAutoFeeder ? 'uncommon' : 'common'}">${profile.hasAutoFeeder ? 'UNLOCKED' : 'LOCKED'}</span>
+                <img src="assets/Icons/auto_feeder.png" class="item-img" alt="Auto Feeder">
+                <div class="item-name">Auto Feeder</div>
+                <div class="item-desc">Auto-feeds tank fish every 12 hrs for 3,500 Gold.</div>
+            </div>
+            <div class="item-card">
+                <span class="item-badge rarity-${profile.hasDeepFreezer ? 'uncommon' : 'common'}">${profile.hasDeepFreezer ? 'UNLOCKED' : 'LOCKED'}</span>
+                <img src="assets/Icons/deep_freezer.png" class="item-img" alt="Deep Freezer">
+                <div class="item-name">Deep Freezer</div>
+                <div class="item-desc">Keeps all catches in Net 100% fresh for 3 days (72h) before standard decay.</div>
+            </div>
+            <div class="item-card">
+                <span class="item-badge rarity-${profile.hasFishingNet ? 'uncommon' : 'common'}">${profile.hasFishingNet ? 'UNLOCKED' : 'LOCKED'}</span>
+                <img src="assets/Icons/fishing_net.png" class="item-img" alt="Fishing Net">
+                <div class="item-name">Fishing Net Perk</div>
+                <div class="item-desc">Grants a 20% double-catch bonus per cast.</div>
+            </div>
+            <div class="item-card">
+                <span class="item-badge rarity-${profile.hasFishingVessel ? 'uncommon' : 'common'}">${profile.hasFishingVessel ? 'UNLOCKED' : 'LOCKED'}</span>
+                <img src="assets/Icons/fishing_vessel.png" class="item-img" alt="Fishing Vessel">
+                <div class="item-name">Fishing Vessel</div>
+                <div class="item-desc">Enables offshore catches & double weight rolls.</div>
+            </div>
+        `;
+    }
+
+    function renderTankTab() {
+        const tankVisualizer = document.getElementById('tankVisualizer');
+        if (!tankVisualizer) return;
+
+        const tankFish = state.userProfile ? (state.userProfile.tankFish || []) : [];
+        
+        let fishHtml = tankFish.map((fish, index) => {
+            const topPos = 20 + (index * 25) % 60;
+            const leftPos = 15 + (index * 30) % 70;
+            return `<img src="assets/fish/legendary/golden_carp.png" class="swimming-fish" style="top: ${topPos}%; left: ${leftPos}%;" title="${fish.species ? fish.species.name : 'Fish'} (HP: ${fish.currentHp}/${fish.maxHp})">`;
+        }).join('');
+
+        let bubblesHtml = '';
+        for (let i = 0; i < 8; i++) {
+            const size = Math.random() * 12 + 6;
+            const left = Math.random() * 95;
+            const delay = Math.random() * 4;
+            bubblesHtml += `<div class="bubble" style="width:${size}px; height:${size}px; left:${left}%; animation-delay:${delay}s;"></div>`;
+        }
+
+        tankVisualizer.innerHTML = bubblesHtml + fishHtml;
+    }
+
+    // 5. Upgrades Shop (Matching GAME_SPECS.md Exactly)
+    function renderShopTab() {
+        const shopGrid = document.getElementById('shopGrid');
+        if (!shopGrid) return;
+
+        const shopItems = [
+            // Rods (GAME_SPECS.md Section 3)
+            { name: "Default Rod", price: 0, desc: "Base Starting Rod (15 Minutes Cooldown)", icon: "assets/Icons/default_rod.png", category: "Rod" },
+            { name: "Standard Rod", price: 30000, desc: "-20% Cooldown (12 Minutes Cooldown)", icon: "assets/Icons/default_rod.png", category: "Rod" },
+            { name: "Golden Rod", price: 150000, desc: "-40% Cooldown (9 Minutes Cooldown)", icon: "assets/Icons/golden_rod.png", category: "Rod" },
+            { name: "Divine Rod", price: 300000, desc: "-60% Cooldown (6 Minutes Cooldown)", icon: "assets/Icons/divine_rod.png", category: "Rod" },
+
+            // Baits (Purchasable or Craftable)
+            { name: "Standard Bait", price: 2000, desc: "2x odds for anything above Common (Or Craft: 4 Common)", icon: "assets/baits/standard_bait.png", category: "Bait" },
+            { name: "Power Bait", price: 7000, desc: "2x odds for anything above Uncommon (Or Craft: 6 Uncommon)", icon: "assets/baits/power_bait.png", category: "Bait" },
+            { name: "Super Bait", price: 10000, desc: "Guarantees anything above Uncommon (Or Craft: 5 Rare)", icon: "assets/baits/super_bait.png", category: "Bait" },
+
+            // Consumables & Recovery Meds
+            { name: "Common & Uncommon Med", price: 2500, desc: "Revives fainted Common/Uncommon fish to 50% HP", icon: "assets/Icons/common_uncommon_med.png", category: "Med" },
+            { name: "Rare & Legendary Med", price: 10000, desc: "Revives fainted Rare/Legendary fish to 50% HP", icon: "assets/Icons/rare_legendary_med.png", category: "Med" },
+            { name: "Mythical & Divine Med", price: 25000, desc: "Revives fainted Mythical/Divine fish to 50% HP", icon: "assets/Icons/mythical_divine_med.png", category: "Med" },
+            { name: "Trophy Bait", price: 25000, desc: "Best weight of 3 rolls on next cast", icon: "assets/Icons/trophy_bait.png", category: "Consumable" },
+            { name: "Fish Eggs", price: 15000, desc: "Increases Tank fish stats by +10% next battle", icon: "assets/Icons/fish_eggs.png", category: "Consumable" },
+
+            // Permanent Account Upgrades
+            { name: "Auto-Feeder", price: 25000, desc: "Auto-feeds tank fish every 12 hrs for 3,500 Gold", icon: "assets/Icons/auto_feeder.png", category: "Upgrade" },
+            { name: "Tank Upgrade", price: 225000, desc: "Expands max tank capacity from 3 to 5 fish", icon: "assets/Icons/tank_expansion.png", category: "Upgrade" },
+            { name: "Fishing Net", price: 75000, desc: "20% chance to catch a second fish per cast", icon: "assets/Icons/fishing_net.png", category: "Upgrade" },
+            { name: "Deep Freezer", price: 100000, desc: "Keeps all catches 100% fresh for 3 days (72h) before decay", icon: "assets/Icons/deep_freezer.png", category: "Upgrade" },
+            { name: "Fishing Vessel", price: 350000, desc: "Enables offshore fishing & double weight rolls", icon: "assets/Icons/fishing_vessel.png", category: "Upgrade" }
+        ];
+
+        shopGrid.innerHTML = shopItems.map(item => `
+            <div class="item-card">
+                <span class="item-badge rarity-common">${item.category}</span>
+                <img src="${item.icon}" class="item-img" alt="${item.name}">
+                <div class="item-name">${item.name}</div>
+                <div class="item-desc">${item.desc}</div>
+                <button class="btn-action btn-gold">${item.price === 0 ? 'Free Starting Rod' : 'Buy for ' + item.price.toLocaleString() + ' Gold'}</button>
+            </div>
+        `).join('');
+    }
+
+    // 6. Crafting Station (With Ingredient Progress Bars & Active/Disabled "Craft" Button)
+    function renderCraftTab() {
+        const craftGrid = document.getElementById('craftGrid');
+        if (!craftGrid) return;
+
+        // Calculate current fish ingredient count in player's Net
+        const netCatches = (state.userProfile && state.userProfile.netCatches) ? state.userProfile.netCatches : [];
+        
+        let commonCount = 0;
+        let uncommonCount = 0;
+        let rareCount = 0;
+
+        netCatches.forEach(c => {
+            const r = (c.species && c.species.rarity) ? c.species.rarity.toLowerCase() : '';
+            if (r === 'common' || c.species.isTrash) commonCount++;
+            else if (r === 'uncommon') uncommonCount++;
+            else if (r === 'rare') rareCount++;
+        });
+
+        // Demo sample fallback counts if testing offline so user can see UI progress
+        if (!state.userProfile || netCatches.length < 5) {
+            commonCount = Math.max(commonCount, 3);
+            uncommonCount = Math.max(uncommonCount, 2);
+            rareCount = Math.max(rareCount, 1);
+        }
+
+        const recipes = [
+            {
+                name: "Standard Bait",
+                reqTier: "Common",
+                requiredCount: 4,
+                currentCount: commonCount,
+                desc: "2x odds for anything above Common",
+                icon: "assets/baits/standard_bait.png"
+            },
+            {
+                name: "Power Bait",
+                reqTier: "Uncommon",
+                requiredCount: 6,
+                currentCount: uncommonCount,
+                desc: "2x odds for anything above Uncommon",
+                icon: "assets/baits/power_bait.png"
+            },
+            {
+                name: "Super Bait",
+                reqTier: "Rare",
+                requiredCount: 5,
+                currentCount: rareCount,
+                desc: "Guarantees anything above Uncommon",
+                icon: "assets/baits/super_bait.png"
+            }
+        ];
+
+        craftGrid.innerHTML = recipes.map(r => {
+            const isReady = r.currentCount >= r.requiredCount;
+            const pct = Math.min(100, Math.floor((r.currentCount / r.requiredCount) * 100));
+
+            return `
+                <div class="item-card" style="align-items: stretch; text-align: left;">
+                    <div style="display:flex; align-items:center; gap: 14px;">
+                        <img src="${r.icon}" class="item-img" alt="${r.name}">
+                        <div style="flex:1;">
+                            <div class="item-name">${r.name}</div>
+                            <div class="item-desc" style="margin-top:2px;">${r.desc}</div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 12px;">
+                        <div style="display:flex; justify-content:space-between; font-size:0.82rem; font-weight:600; color:var(--text-secondary); margin-bottom:4px;">
+                            <span>Ingredients: ${r.currentCount} / ${r.requiredCount} ${r.reqTier} Fish</span>
+                            <span style="color: ${isReady ? 'var(--accent-emerald)' : 'var(--accent-cyan)'};">${pct}%</span>
+                        </div>
+                        <div class="progress-bar-bg">
+                            <div class="progress-bar-fill ${isReady ? 'complete' : ''}" style="width: ${pct}%;"></div>
+                        </div>
+                    </div>
+
+                    <button class="btn-action ${isReady ? 'btn-gold' : ''}" 
+                        style="margin-top: 14px; ${!isReady ? 'opacity: 0.45; cursor: not-allowed; background: var(--bg-secondary); border: 1px solid var(--border-color);' : ''}" 
+                        ${!isReady ? 'disabled' : ''}>
+                        Craft
+                    </button>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // 7. Leaderboards
+    function renderRanksTab() {
+        const ranksGrid = document.getElementById('ranksGrid');
+        if (!ranksGrid) return;
+
+        ranksGrid.innerHTML = `
+            <div style="grid-column: 1/-1; background: var(--bg-card); padding: 24px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                <h3 style="margin-bottom: 16px;">🏆 Channel Leaderboards</h3>
+                <div style="display:flex; justify-content:space-between; padding: 12px 0; border-bottom: 1px solid var(--border-color);">
+                    <span><b>🥇 StreamLegend</b></span>
+                    <span style="color: var(--accent-gold); font-weight:700;">142,500 Gold</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; padding: 12px 0; border-bottom: 1px solid var(--border-color);">
+                    <span><b>🥈 AnglerKing</b></span>
+                    <span style="color: var(--accent-gold); font-weight:700;">98,500 Gold</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; padding: 12px 0;">
+                    <span><b>🥉 FishMaster99</b></span>
+                    <span style="color: var(--accent-gold); font-weight:700;">74,200 Gold</span>
+                </div>
+            </div>
+        `;
+    }
+
+    // 8. Fish Encyclopedia (Highest Weight for Discovered; Trash under Common; No Base Price or Min/Max Range)
+    function renderLogTab() {
+        const logGrid = document.getElementById('logGrid');
+        if (!logGrid) return;
+
+        const caughtStats = (state.userProfile && state.userProfile.caughtStats) ? state.userProfile.caughtStats : {};
+
+        // Count totals per filter
+        const totalItems = MASTER_SPECIES_CATALOG.length; // 148
+        const commonCount = MASTER_SPECIES_CATALOG.filter(i => i.tier === 'Common').length; // 36 (30 species + 6 trash)
+        const uncommonCount = MASTER_SPECIES_CATALOG.filter(i => i.tier === 'Uncommon').length; // 28
+        const rareCount = MASTER_SPECIES_CATALOG.filter(i => i.tier === 'Rare').length; // 32
+        const legendaryCount = MASTER_SPECIES_CATALOG.filter(i => i.tier === 'Legendary').length; // 26
+        const mythicalCount = MASTER_SPECIES_CATALOG.filter(i => i.tier === 'Mythical').length; // 22
+        const divineCount = MASTER_SPECIES_CATALOG.filter(i => i.tier === 'Divine').length; // 5
+
+        // Filter Bar HTML (Trash is under Common category)
+        const filterBarHtml = `
+            <div class="filter-bar" style="grid-column: 1/-1;">
+                <button class="filter-btn ${state.activeLogFilter === 'all' ? 'active' : ''}" onclick="window.setLogFilter('all')">All (${totalItems})</button>
+                <button class="filter-btn ${state.activeLogFilter === 'Common' ? 'active' : ''}" onclick="window.setLogFilter('Common')">Common (${commonCount})</button>
+                <button class="filter-btn ${state.activeLogFilter === 'Uncommon' ? 'active' : ''}" onclick="window.setLogFilter('Uncommon')">Uncommon (${uncommonCount})</button>
+                <button class="filter-btn ${state.activeLogFilter === 'Rare' ? 'active' : ''}" onclick="window.setLogFilter('Rare')">Rare (${rareCount})</button>
+                <button class="filter-btn ${state.activeLogFilter === 'Legendary' ? 'active' : ''}" onclick="window.setLogFilter('Legendary')">Legendary (${legendaryCount})</button>
+                <button class="filter-btn ${state.activeLogFilter === 'Mythical' ? 'active' : ''}" onclick="window.setLogFilter('Mythical')">Mythical (${mythicalCount})</button>
+                <button class="filter-btn ${state.activeLogFilter === 'Divine' ? 'active' : ''}" onclick="window.setLogFilter('Divine')">Divine (${divineCount})</button>
+            </div>
+        `;
+
+        const filteredList = MASTER_SPECIES_CATALOG.filter(item => {
+            if (state.activeLogFilter === 'all') return true;
+            return item.tier === state.activeLogFilter;
+        });
+
+        const cardsHtml = filteredList.map(item => {
+            const stat = caughtStats[item.name.toLowerCase()];
+            const isDiscovered = !!stat;
+            const rarityClass = (item.tier || 'common').toLowerCase();
+
+            let statTextHtml = '';
+            if (isDiscovered) {
+                const timesCaught = stat.timesCaught || 1;
+                const heaviestW = stat.heaviestWeight ? stat.heaviestWeight.toFixed(1) + ' lbs' : 'N/A';
+                statTextHtml = `Caught: <strong>x${timesCaught}</strong> | Heaviest: <strong>${heaviestW}</strong>`;
+            } else {
+                statTextHtml = `<span style="color: var(--text-muted);">Undiscovered</span>`;
+            }
+
+            return `
+                <div class="log-card">
+                    <span class="item-badge rarity-${rarityClass}">${item.tier}</span>
+                    <div class="log-img-box">
+                        <img src="${item.asset}" class="log-fish-img ${isDiscovered ? '' : 'undiscovered'}" alt="${item.name}">
+                    </div>
+                    <div class="item-name">${isDiscovered ? item.name : '??? Undiscovered'}</div>
+                    <div class="log-stats">
+                        ${statTextHtml}
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        logGrid.innerHTML = filterBarHtml + cardsHtml;
+    }
+
+    window.setLogFilter = function(filter) {
+        state.activeLogFilter = filter;
+        renderLogTab();
+    };
+
+    // Event Listeners & UI Helpers
+    function setupEventListeners() {
+        const loginBtn = document.getElementById('btnTwitchLogin');
+        if (loginBtn) loginBtn.addEventListener('click', loginWithTwitch);
+
+        const logoutBtn = document.getElementById('btnLogout');
+        if (logoutBtn) logoutBtn.addEventListener('click', logoutUser);
+    }
+
+    function updateUserHeaderUI() {
+        const loggedOutContainer = document.getElementById('loggedOutContainer');
+        const loggedInContainer = document.getElementById('loggedInContainer');
+        const userAvatar = document.getElementById('userAvatar');
+        const userName = document.getElementById('userName');
+
+        if (state.currentUser) {
+            if (loggedOutContainer) loggedOutContainer.style.display = 'none';
+            if (loggedInContainer) loggedInContainer.style.display = 'flex';
+            if (userAvatar) userAvatar.src = state.currentUser.profileImage || 'assets/Icons/sr.png';
+            if (userName) userName.textContent = state.currentUser.displayName || state.currentUser.username;
+        } else {
+            if (loggedOutContainer) loggedOutContainer.style.display = 'block';
+            if (loggedInContainer) loggedInContainer.style.display = 'none';
+        }
+    }
+
+    function renderLoggedOutState() {
+        updateUserHeaderUI();
+    }
+
+    function startAutoSync() {
+        if (state.syncTimer) clearInterval(state.syncTimer);
+        state.syncTimer = setInterval(fetchUserProfile, window.CONFIG.SYNC_INTERVAL_MS);
+    }
+
+    // Global action bindings
+    window.sellFish = function(fishId) {
+        alert(`Selling catch #${fishId}...`);
+        fetchUserProfile();
+    };
+});
