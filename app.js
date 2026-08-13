@@ -8,7 +8,48 @@ document.addEventListener('DOMContentLoaded', () => {
         userProfile: null,
         activeTab: 'net',
         activeLogFilter: 'all',
+        activeRankSubTab: 'catches',
+        cooldownTimerInterval: null,
         syncTimer: null
+    };
+
+    // Custom In-App Modal Dialog Utility (Replaces native alert/confirm popups)
+    window.showAppModal = function({ icon = 'ℹ️', title = 'Notice', message = '', confirmText = 'OK', cancelText = null, onConfirm = null }) {
+        const existing = document.getElementById('appModalOverlay');
+        if (existing) existing.remove();
+
+        const overlay = document.createElement('div');
+        overlay.className = 'app-modal-overlay';
+        overlay.id = 'appModalOverlay';
+
+        overlay.innerHTML = `
+            <div class="app-modal-card">
+                <div style="font-size: 3rem; filter: drop-shadow(0 4px 10px rgba(0,229,255,0.4));">${icon}</div>
+                <h3 style="font-size: 1.35rem; font-weight: 800; color: #fff; margin-bottom: 2px;">${title}</h3>
+                <p style="font-size: 0.92rem; color: var(--text-secondary); line-height: 1.5;">${message}</p>
+                <div style="display: flex; gap: 12px; width: 100%; justify-content: center; margin-top: 10px;">
+                    ${cancelText ? `<button class="btn-action" style="background: rgba(255,255,255,0.1); width: auto; padding: 10px 24px;" id="btnModalCancel">${cancelText}</button>` : ''}
+                    <button class="btn-action btn-gold" style="width: auto; padding: 10px 28px; font-weight: 800;" id="btnModalConfirm">${confirmText}</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+
+        const btnConfirm = overlay.querySelector('#btnModalConfirm');
+        if (btnConfirm) {
+            btnConfirm.addEventListener('click', () => {
+                overlay.remove();
+                if (onConfirm) onConfirm();
+            });
+        }
+
+        const btnCancel = overlay.querySelector('#btnModalCancel');
+        if (btnCancel) {
+            btnCancel.addEventListener('click', () => {
+                overlay.remove();
+            });
+        }
     };
 
     // Master Catalog of 148 Species & Trash Items (derived from GAME_SPECS.md & DbInitializer.cs)
@@ -350,11 +391,31 @@ document.addEventListener('DOMContentLoaded', () => {
         const statRod = document.getElementById('statRod');
         if (statRod) statRod.textContent = state.userProfile.activeRod || "Default Rod";
 
-        // Cooldown timer
-        updateCooldownUI(state.userProfile.remainingCooldownSeconds || 0);
+        // Start 1-second ticker for smooth countdown
+        startCooldownTicker();
 
         // Render Active Tab
         renderCurrentTabContent();
+    }
+
+    function startCooldownTicker() {
+        if (state.cooldownTimerInterval) clearInterval(state.cooldownTimerInterval);
+
+        updateCooldownUI(state.userProfile ? (state.userProfile.remainingCooldownSeconds || 0) : 0);
+        updateDailyClaimUI();
+
+        state.cooldownTimerInterval = setInterval(() => {
+            if (!state.userProfile) return;
+
+            if (state.userProfile.remainingCooldownSeconds > 0) {
+                state.userProfile.remainingCooldownSeconds--;
+                updateCooldownUI(state.userProfile.remainingCooldownSeconds);
+            } else {
+                updateCooldownUI(0);
+            }
+
+            updateDailyClaimUI();
+        }, 1000);
     }
 
     function updateCooldownUI(secondsRemaining) {
@@ -371,6 +432,89 @@ document.addEventListener('DOMContentLoaded', () => {
             timerEl.style.color = "var(--accent-cyan)";
         }
     }
+
+    // Daily Claim 1,000 Gold Logic (24-Hour Cycle)
+    function getDailyClaimStatus() {
+        if (!state.userProfile) return { canClaim: false, timeRemainingStr: '' };
+
+        const lastClaimStr = state.userProfile.lastDailyClaimTime;
+        const lastClaim = lastClaimStr ? new Date(lastClaimStr).getTime() : 0;
+        const now = Date.now();
+        const elapsed = now - lastClaim;
+        const dayMs = 24 * 60 * 60 * 1000;
+
+        if (elapsed >= dayMs || !lastClaim) {
+            return { canClaim: true, timeRemainingStr: '' };
+        } else {
+            const remMs = dayMs - elapsed;
+            const hrs = Math.floor(remMs / (1000 * 60 * 60));
+            const mins = Math.floor((remMs % (1000 * 60 * 60)) / (1000 * 60));
+            const secs = Math.floor((remMs % (1000 * 60)) / 1000);
+            return { canClaim: false, timeRemainingStr: `${hrs}h ${mins}m ${secs}s` };
+        }
+    }
+
+    function updateDailyClaimUI() {
+        const btn = document.getElementById('btnClaimDaily');
+        const text = document.getElementById('dailyBtnText');
+        if (!btn || !text) return;
+
+        const status = getDailyClaimStatus();
+        if (status.canClaim) {
+            btn.disabled = false;
+            btn.style.opacity = '1';
+            btn.style.cursor = 'pointer';
+            btn.className = 'btn-action btn-gold';
+            text.textContent = 'Claim Daily (1,000 Gold)';
+        } else {
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            btn.style.cursor = 'not-allowed';
+            btn.className = 'btn-action';
+            text.textContent = `Daily: ${status.timeRemainingStr}`;
+        }
+    }
+
+    window.claimDailyReward = async function() {
+        if (!state.userProfile) return;
+        const status = getDailyClaimStatus();
+
+        if (!status.canClaim) {
+            window.showAppModal({
+                icon: '⏳',
+                title: 'Daily Reward Already Claimed',
+                message: `@${state.userProfile.username || 'Viewer'} already claimed the daily! Come back in ${status.timeRemainingStr}.`
+            });
+            return;
+        }
+
+        try {
+            const res = await fetch(`${window.CONFIG.API_BASE_URL}/api/user/claim-daily`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: state.userProfile.id })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                state.userProfile.gold = data.newGold !== undefined ? data.newGold : (state.userProfile.gold + 1000);
+                state.userProfile.lastDailyClaimTime = new Date().toISOString();
+            } else {
+                state.userProfile.gold = (state.userProfile.gold || 0) + 1000;
+                state.userProfile.lastDailyClaimTime = new Date().toISOString();
+            }
+        } catch (err) {
+            state.userProfile.gold = (state.userProfile.gold || 0) + 1000;
+            state.userProfile.lastDailyClaimTime = new Date().toISOString();
+        }
+
+        renderProfileData();
+        window.showAppModal({
+            icon: '🎁',
+            title: 'Daily Reward Claimed!',
+            message: `@${state.userProfile.username || 'Viewer'} claimed 1,000 Gold! Next claim available in 24 hours.`
+        });
+    };
 
     // 3. Navigation & Tab Switcher
     function setupNavigation() {
@@ -597,12 +741,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 <span class="item-badge rarity-${profile.hasFishingVessel ? 'uncommon' : 'common'}">${profile.hasFishingVessel ? 'UNLOCKED' : 'LOCKED'}</span>
                 <img src="assets/Icons/fishing_vessel.png" class="item-img" alt="Fishing Vessel">
                 <div class="item-name">Fishing Vessel</div>
-                <div class="item-desc">Enables offshore catches & double weight rolls.</div>
-            </div>
-        `;
-    }
-
-    function renderTankTab() {
+                <div class="item-desc">Enables offshore catches & double    function renderTankTab() {
+        const tankInfoPanel = document.getElementById('tankInfoPanel');
         const tankVisualizer = document.getElementById('tankVisualizer');
         if (!tankVisualizer) return;
 
@@ -622,27 +762,27 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         const canFeed = isFeedDue || hasLowHpFish;
 
-        // Top Action Header for Tank
+        // Tank Header Info (Rendered OUTSIDE/ABOVE tankVisualizer into tankInfoPanel)
         const tankHeaderHtml = `
-            <div style="position: absolute; top: 15px; left: 20px; right: 20px; z-index: 50; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; background: rgba(4, 15, 30, 0.85); backdrop-filter: blur(10px); border: 1px solid rgba(0, 229, 255, 0.25); padding: 12px 20px; border-radius: var(--radius-md);">
+            <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; background: rgba(4, 15, 30, 0.85); backdrop-filter: blur(10px); border: 1px solid rgba(0, 229, 255, 0.25); padding: 14px 22px; border-radius: var(--radius-md);">
                 <div>
-                    <div style="font-weight: 700; font-size: 1rem; color: #fff; display: flex; align-items: center; gap: 8px;">
-                        <span>🐠 Aquarium:</span>
+                    <div style="font-weight: 700; font-size: 1.05rem; color: #fff; display: flex; align-items: center; gap: 8px;">
+                        <span>🐠 Aquarium Status:</span>
                         <span style="color: var(--accent-cyan); font-weight: 800;">${tankFish.length} / ${capacity} Slots</span>
                         ${hasAutoFeeder ? '<span style="font-size:0.75rem; background:rgba(0,229,255,0.15); color:var(--accent-cyan); border:1px solid rgba(0,229,255,0.3); padding:2px 8px; border-radius:12px;">🤖 Auto-Feeder</span>' : ''}
                         ${hasLowHpFish ? '<span style="font-size:0.75rem; background:rgba(244,63,94,0.15); color:var(--accent-rose); border:1px solid rgba(244,63,94,0.3); padding:2px 8px; border-radius:12px;">⚠️ Fish HP Low!</span>' : ''}
                     </div>
-                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
+                    <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 3px;">
                         Feed cycle: 12h &nbsp;|&nbsp; Regen: +10% HP/30m while fed &nbsp;|&nbsp; Alive fish sell at 100%, fainted at 50%
                     </div>
                 </div>
-                <div style="display: flex; gap: 10px; align-items: center; flex-wrap:wrap;">
+                <div style="display: flex; gap: 12px; align-items: center; flex-wrap:wrap;">
                     <button class="btn-action ${canFeed ? 'btn-gold' : ''}" 
-                        style="width: auto; padding: 8px 18px; font-weight:700; ${!canFeed ? 'opacity:0.4; cursor:not-allowed; background:var(--bg-secondary); border:1px solid var(--border-color);' : ''}" 
+                        style="width: auto; padding: 10px 20px; font-weight:700; ${!canFeed ? 'opacity:0.4; cursor:not-allowed; background:var(--bg-secondary); border:1px solid var(--border-color);' : ''}" 
                         onclick="window.feedTank()" ${!canFeed ? 'disabled' : ''}>
                         🥣 Feed Tank (1,000 Gold)
                     </button>
-                    <div style="background:rgba(244,63,94,0.12); border:1px solid rgba(244,63,94,0.3); border-radius:var(--radius-md); padding:7px 14px; font-size:0.8rem; font-weight:600; color:#fff; line-height:1.5;">
+                    <div style="background:rgba(244,63,94,0.12); border:1px solid rgba(244,63,94,0.3); border-radius:var(--radius-md); padding:8px 16px; font-size:0.8rem; font-weight:600; color:#fff; line-height:1.5;">
                         ⚔️ <b style="color:var(--accent-rose);">Chat Battles:</b><br>
                         <code style="color:var(--accent-gold); font-size:0.78rem;">!fishbattle [gold]</code> — vs random<br>
                         <code style="color:var(--accent-gold); font-size:0.78rem;">!fishbattle @user [gold]</code> — challenge (60s to accept)
@@ -650,6 +790,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             </div>
         `;
+
+        if (tankInfoPanel) tankInfoPanel.innerHTML = tankHeaderHtml;
 
         let fishHtml = '';
         if (tankFish.length === 0) {
@@ -678,8 +820,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const sellVal = isFainted ? Math.floor(aliveSell * 0.5) : aliveSell;
 
                 // Spread out swimming positions
-                const topPos = 28 + (index * 22) % 50;
-                const leftPos = 12 + (index * 28) % 65;
+                const topPos = 20 + (index * 24) % 55;
+                const leftPos = 10 + (index * 30) % 70;
 
                 return `
                     <div class="swimming-fish-wrapper" style="top: ${topPos}%; left: ${leftPos}%;" title="${specName} (HP: ${curHp}/${maxHp} | ATK: ${atk})">
@@ -693,7 +835,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <span style="color:${qualityColor}; font-weight:700;">${qualityLabel} (${qualityMult.toFixed(2)}x)</span>
                         </div>
                         <button onclick="window.sellTankFish(${fish.id}, ${sellVal}, '${specName.replace(/'/g, "\\'")}')"
-                            style="margin-top:5px; padding:3px 10px; font-size:0.72rem; font-weight:700; border:none; border-radius:6px; cursor:pointer; background:linear-gradient(135deg,#ffb703,#fb8500); color:#000;">
+                            style="margin-top:5px; padding:3px 10px; font-size:0.72rem; font-weight:700; border:none; border-radius:6px; cursor:pointer; background:linear-gradient(135deg,#ffd166,#ffb703); color:#000;">
                             Sell 🪙 ${sellVal.toLocaleString()}${isFainted ? ' (50%)' : ''}
                         </button>
                     </div>
@@ -702,14 +844,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         let bubblesHtml = '';
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 12; i++) {
             const size = Math.random() * 12 + 6;
             const left = Math.random() * 95;
             const delay = Math.random() * 4;
             bubblesHtml += `<div class="bubble" style="width:${size}px; height:${size}px; left:${left}%; animation-delay:${delay}s;"></div>`;
         }
 
-        tankVisualizer.innerHTML = tankHeaderHtml + bubblesHtml + fishHtml;
+        tankVisualizer.innerHTML = bubblesHtml + fishHtml;
     }
 
     // 5. Upgrades Shop (Matching GAME_SPECS.md Exactly)
@@ -725,9 +867,9 @@ document.addEventListener('DOMContentLoaded', () => {
             { name: "Divine Rod", price: 300000, desc: "-60% Cooldown (6 Minutes Cooldown)", icon: "assets/Icons/divine_rod.png", category: "Rod" },
 
             // Baits (Purchasable or Craftable) — per GAME_SPECS.md
-            { name: "Standard Bait", price: 3000, desc: "2x odds for anything above Common (Or Craft: 15 Common Fish)", icon: "assets/baits/standard_bait.png", category: "Bait" },
-            { name: "Power Bait", price: 10000, desc: "2x odds for anything above Uncommon (Or Craft: 10 Uncommon Fish)", icon: "assets/baits/power_bait.png", category: "Bait" },
-            { name: "Super Bait", price: 55000, desc: "Guarantees anything above Uncommon (Or Craft: 17 Rare Fish)", icon: "assets/baits/super_bait.png", category: "Bait" },
+            { name: "Standard Bait", price: 3000, desc: "2x odds for anything above Common (Or Craft: 4 Common Fish)", icon: "assets/baits/standard_bait.png", category: "Bait" },
+            { name: "Power Bait", price: 10000, desc: "2x odds for anything above Uncommon (Or Craft: 6 Uncommon Fish)", icon: "assets/baits/power_bait.png", category: "Bait" },
+            { name: "Super Bait", price: 55000, desc: "Guarantees anything above Uncommon (Or Craft: 5 Rare Fish)", icon: "assets/baits/super_bait.png", category: "Bait" },
 
             // Consumables & Recovery Meds
             { name: "Common & Uncommon Med", price: 2500, desc: "Revives fainted Common/Uncommon fish to 50% HP", icon: "assets/Icons/common_uncommon_med.png", category: "Med" },
@@ -844,15 +986,25 @@ document.addEventListener('DOMContentLoaded', () => {
         }).join('');
     }
 
-    // 7. Leaderboards (Matching web_version.md: Catches, Trophy, Richest, Battles Won)
+    // 7. Leaderboards (With Sub-Tabs: Catches, Trophy, Richest, Battles Won)
     async function renderRanksTab() {
         const ranksGrid = document.getElementById('ranksGrid');
         if (!ranksGrid) return;
 
-        // Render skeleton loader
-        ranksGrid.innerHTML = `
+        const activeSub = state.activeRankSubTab || 'catches';
+
+        const subTabsNavHtml = `
+            <div style="display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap;">
+                <button class="filter-btn ${activeSub === 'catches' ? 'active' : ''}" onclick="window.setRankSubTab('catches')">🎣 Total Catches</button>
+                <button class="filter-btn ${activeSub === 'trophies' ? 'active' : ''}" onclick="window.setRankSubTab('trophies')">🏆 Trophy Records</button>
+                <button class="filter-btn ${activeSub === 'gold' ? 'active' : ''}" onclick="window.setRankSubTab('gold')">🪙 Most Richest</button>
+                <button class="filter-btn ${activeSub === 'battles' ? 'active' : ''}" onclick="window.setRankSubTab('battles')">⚔️ Battles Won</button>
+            </div>
+        `;
+
+        ranksGrid.innerHTML = subTabsNavHtml + `
             <div style="grid-column: 1/-1; text-align:center; padding: 40px; color: var(--text-muted);">
-                🔄 Loading Channel Leaderboards...
+                🔄 Loading Leaderboard...
             </div>
         `;
 
@@ -888,89 +1040,149 @@ document.addEventListener('DOMContentLoaded', () => {
                 { username: "FishFighter", battlesWon: 19 }
             ];
 
-            ranksGrid.innerHTML = `
-                <!-- 1. Total Catches -->
-                <div class="item-card" style="align-items: stretch; text-align: left;">
-                    <h3 style="margin-bottom: 12px; display:flex; align-items:center; gap:8px;">
-                        <span>🎣</span> Total Catches
-                    </h3>
-                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 14px;">Most fish caught overall in channel</div>
-                    ${catchesData.slice(0, 5).map((row, idx) => `
-                        <div style="display:flex; justify-content:space-between; padding: 8px 0; border-bottom: 1px solid var(--border-glass);">
-                            <span><b>${idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '#' + (idx + 1)} ${row.username || row.holderUsername || 'Angler'}</b></span>
-                            <span style="color: var(--accent-cyan); font-weight:700;">${(row.totalCatches || 0).toLocaleString()} Catches</span>
-                        </div>
-                    `).join('')}
-                </div>
+            let cardContentHtml = '';
 
-                <!-- 2. Trophy Records -->
-                <div class="item-card" style="align-items: stretch; text-align: left;">
-                    <h3 style="margin-bottom: 12px; display:flex; align-items:center; gap:8px;">
-                        <span>🏆</span> Trophy Records
-                    </h3>
-                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 14px;">Heaviest record fish caught overall</div>
-                    ${trophiesData.slice(0, 5).map((row, idx) => `
-                        <div style="display:flex; justify-content:space-between; padding: 8px 0; border-bottom: 1px solid var(--border-glass);">
-                            <div>
-                                <b>${idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '#' + (idx + 1)} ${row.holderUsername || row.username || 'Angler'}</b><br>
-                                <span style="font-size:0.75rem; color:var(--text-muted);">${row.speciesName || 'Fish Record'}</span>
+            if (activeSub === 'catches') {
+                cardContentHtml = `
+                    <div class="item-card" style="align-items: stretch; text-align: left;">
+                        <h3 style="margin-bottom: 12px; display:flex; align-items:center; gap:8px;">
+                            <span>🎣</span> Total Catches Leaderboard
+                        </h3>
+                        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 14px;">Most fish caught overall in channel</div>
+                        ${catchesData.map((row, idx) => `
+                            <div style="display:flex; justify-content:space-between; padding: 10px 0; border-bottom: 1px solid var(--border-glass);">
+                                <span><b>${idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '#' + (idx + 1)} ${row.username || row.holderUsername || 'Angler'}</b></span>
+                                <span style="color: var(--accent-cyan); font-weight:700;">${(row.totalCatches || 0).toLocaleString()} Catches</span>
                             </div>
-                            <span style="color: var(--accent-gold); font-weight:700;">${(row.heaviestWeight || 0).toFixed(1)} lbs</span>
-                        </div>
-                    `).join('')}
-                </div>
+                        `).join('')}
+                    </div>
+                `;
+            } else if (activeSub === 'trophies') {
+                cardContentHtml = `
+                    <div class="item-card" style="align-items: stretch; text-align: left;">
+                        <h3 style="margin-bottom: 12px; display:flex; align-items:center; gap:8px;">
+                            <span>🏆</span> Trophy Records Leaderboard
+                        </h3>
+                        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 14px;">Heaviest record fish caught overall in channel</div>
+                        ${trophiesData.map((row, idx) => `
+                            <div style="display:flex; justify-content:space-between; padding: 10px 0; border-bottom: 1px solid var(--border-glass);">
+                                <div>
+                                    <b>${idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '#' + (idx + 1)} ${row.holderUsername || row.username || 'Angler'}</b><br>
+                                    <span style="font-size:0.78rem; color:var(--text-muted);">${row.speciesName || 'Fish Record'}</span>
+                                </div>
+                                <span style="color: var(--accent-gold); font-weight:700;">${(row.heaviestWeight || 0).toFixed(1)} lbs</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            } else if (activeSub === 'gold') {
+                cardContentHtml = `
+                    <div class="item-card" style="align-items: stretch; text-align: left;">
+                        <h3 style="margin-bottom: 12px; display:flex; align-items:center; gap:8px;">
+                            <span>🪙</span> Most Richest Leaderboard
+                        </h3>
+                        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 14px;">Most Gold overall in channel</div>
+                        ${goldData.map((row, idx) => `
+                            <div style="display:flex; justify-content:space-between; padding: 10px 0; border-bottom: 1px solid var(--border-glass);">
+                                <span><b>${idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '#' + (idx + 1)} ${row.username || 'Angler'}</b></span>
+                                <span style="color: var(--accent-gold); font-weight:700;">🪙 ${(row.gold || 0).toLocaleString()} Gold</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            } else if (activeSub === 'battles') {
+                cardContentHtml = `
+                    <div class="item-card" style="align-items: stretch; text-align: left;">
+                        <h3 style="margin-bottom: 12px; display:flex; align-items:center; gap:8px;">
+                            <span>⚔️</span> Battles Won Leaderboard
+                        </h3>
+                        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 14px;">Most victories overall in fish battles</div>
+                        ${battlesData.map((row, idx) => `
+                            <div style="display:flex; justify-content:space-between; padding: 10px 0; border-bottom: 1px solid var(--border-glass);">
+                                <span><b>${idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '#' + (idx + 1)} ${row.username || 'Angler'}</b></span>
+                                <span style="color: var(--accent-emerald); font-weight:700;">${(row.battlesWon || 0).toLocaleString()} Wins</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
 
-                <!-- 3. Most Richest -->
-                <div class="item-card" style="align-items: stretch; text-align: left;">
-                    <h3 style="margin-bottom: 12px; display:flex; align-items:center; gap:8px;">
-                        <span>🪙</span> Most Richest
-                    </h3>
-                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 14px;">Most Gold overall in channel</div>
-                    ${goldData.slice(0, 5).map((row, idx) => `
-                        <div style="display:flex; justify-content:space-between; padding: 8px 0; border-bottom: 1px solid var(--border-glass);">
-                            <span><b>${idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '#' + (idx + 1)} ${row.username || 'Angler'}</b></span>
-                            <span style="color: var(--accent-gold); font-weight:700;">🪙 ${(row.gold || 0).toLocaleString()} Gold</span>
-                        </div>
-                    `).join('')}
-                </div>
-
-                <!-- 4. Battles Won -->
-                <div class="item-card" style="align-items: stretch; text-align: left;">
-                    <h3 style="margin-bottom: 12px; display:flex; align-items:center; gap:8px;">
-                        <span>⚔️</span> Battles Won
-                    </h3>
-                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 14px;">Most wins overall in fish battles</div>
-                    ${battlesData.slice(0, 5).map((row, idx) => `
-                        <div style="display:flex; justify-content:space-between; padding: 8px 0; border-bottom: 1px solid var(--border-glass);">
-                            <span><b>${idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '#' + (idx + 1)} ${row.username || 'Angler'}</b></span>
-                            <span style="color: var(--accent-emerald); font-weight:700;">${(row.battlesWon || 0).toLocaleString()} Wins</span>
-                        </div>
-                    `).join('')}
-                </div>
-            `;
+            ranksGrid.innerHTML = subTabsNavHtml + cardContentHtml;
         } catch (err) {
             console.error("Error loading leaderboards:", err);
         }
     }
 
-    // 8. Fish Encyclopedia (Highest Weight for Discovered; Trash under Common; No Base Price or Min/Max Range)
+    window.setRankSubTab = function(subTab) {
+        state.activeRankSubTab = subTab;
+        renderRanksTab();
+    };
+
+    // 8. Fish Encyclopedia (Discovered Species Count, Full Color Images on Discovery)
     function renderLogTab() {
         const logGrid = document.getElementById('logGrid');
         if (!logGrid) return;
 
         const caughtStats = (state.userProfile && state.userProfile.caughtStats) ? state.userProfile.caughtStats : {};
 
-        // Count totals per filter
-        const totalItems = MASTER_SPECIES_CATALOG.length; // 148
-        const commonCount = MASTER_SPECIES_CATALOG.filter(i => i.tier === 'Common').length; // 36 (30 species + 6 trash)
-        const uncommonCount = MASTER_SPECIES_CATALOG.filter(i => i.tier === 'Uncommon').length; // 28
-        const rareCount = MASTER_SPECIES_CATALOG.filter(i => i.tier === 'Rare').length; // 32
-        const legendaryCount = MASTER_SPECIES_CATALOG.filter(i => i.tier === 'Legendary').length; // 26
-        const mythicalCount = MASTER_SPECIES_CATALOG.filter(i => i.tier === 'Mythical').length; // 22
-        const divineCount = MASTER_SPECIES_CATALOG.filter(i => i.tier === 'Divine').length; // 5
+        // Build comprehensive set of discovered species names
+        const discoveredMap = new Map();
 
-        // Filter Bar HTML (Trash is under Common category)
-        const filterBarHtml = `
+        if (state.userProfile) {
+            if (state.userProfile.caughtStats) {
+                Object.entries(state.userProfile.caughtStats).forEach(([k, v]) => {
+                    discoveredMap.set(k.toLowerCase(), v);
+                });
+            }
+
+            const checkAdd = (name, weight = null) => {
+                if (!name) return;
+                const key = name.toLowerCase();
+                if (!discoveredMap.has(key)) {
+                    discoveredMap.set(key, { timesCaught: 1, heaviestWeight: weight || 1.0 });
+                }
+            };
+
+            if (state.userProfile.netCatches) {
+                state.userProfile.netCatches.forEach(c => {
+                    const n = c.species ? (c.species.name || c.speciesName) : c.speciesName;
+                    checkAdd(n, c.weight);
+                });
+            }
+
+            if (state.userProfile.tankFish) {
+                state.userProfile.tankFish.forEach(f => {
+                    const n = f.species ? (f.species.name || f.speciesName) : f.speciesName;
+                    checkAdd(n, f.weight);
+                });
+            }
+
+            if (state.userProfile.caughtSpecies && Array.isArray(state.userProfile.caughtSpecies)) {
+                state.userProfile.caughtSpecies.forEach(s => checkAdd(String(s)));
+            }
+        }
+
+        const totalItems = MASTER_SPECIES_CATALOG.length; // 148
+        const discoveredCount = MASTER_SPECIES_CATALOG.filter(item => discoveredMap.has(item.name.toLowerCase())).length;
+        const discoveredPct = ((discoveredCount / totalItems) * 100).toFixed(1);
+
+        const commonCount = MASTER_SPECIES_CATALOG.filter(i => i.tier === 'Common').length;
+        const uncommonCount = MASTER_SPECIES_CATALOG.filter(i => i.tier === 'Uncommon').length;
+        const rareCount = MASTER_SPECIES_CATALOG.filter(i => i.tier === 'Rare').length;
+        const legendaryCount = MASTER_SPECIES_CATALOG.filter(i => i.tier === 'Legendary').length;
+        const mythicalCount = MASTER_SPECIES_CATALOG.filter(i => i.tier === 'Mythical').length;
+        const divineCount = MASTER_SPECIES_CATALOG.filter(i => i.tier === 'Divine').length;
+
+        // Top Summary Header + Filter Bar HTML
+        const summaryHeaderHtml = `
+            <div style="grid-column: 1/-1; background: var(--bg-glass); border: 1px solid var(--border-glass); padding: 16px 20px; border-radius: var(--radius-lg); margin-bottom: 12px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px;">
+                <div>
+                    <div style="font-size: 1.15rem; font-weight: 700; color: #fff;">📖 Species & Trash Encyclopedia</div>
+                    <div style="font-size: 0.92rem; color: var(--accent-gold); font-weight: 700; margin-top: 3px;">
+                        Discovered: <span style="color: var(--accent-cyan); font-weight: 800;">${discoveredCount} / ${totalItems} Species</span> (${discoveredPct}%)
+                    </div>
+                </div>
+            </div>
             <div class="filter-bar" style="grid-column: 1/-1;">
                 <button class="filter-btn ${state.activeLogFilter === 'all' ? 'active' : ''}" onclick="window.setLogFilter('all')">All (${totalItems})</button>
                 <button class="filter-btn ${state.activeLogFilter === 'Common' ? 'active' : ''}" onclick="window.setLogFilter('Common')">Common (${commonCount})</button>
@@ -988,14 +1200,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         const cardsHtml = filteredList.map(item => {
-            const stat = caughtStats[item.name.toLowerCase()];
+            const stat = discoveredMap.get(item.name.toLowerCase());
             const isDiscovered = !!stat;
             const rarityClass = (item.tier || 'common').toLowerCase();
 
             let statTextHtml = '';
             if (isDiscovered) {
                 const timesCaught = stat.timesCaught || 1;
-                const heaviestW = stat.heaviestWeight ? stat.heaviestWeight.toFixed(1) + ' lbs' : 'N/A';
+                const heaviestW = stat.heaviestWeight ? (typeof stat.heaviestWeight === 'number' ? stat.heaviestWeight.toFixed(1) + ' lbs' : stat.heaviestWeight) : '1.0 lbs';
                 statTextHtml = `Caught: <strong>x${timesCaught}</strong> | Heaviest: <strong>${heaviestW}</strong>`;
             } else {
                 statTextHtml = `<span style="color: var(--text-muted);">Undiscovered</span>`;
@@ -1015,7 +1227,7 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
         }).join('');
 
-        logGrid.innerHTML = filterBarHtml + cardsHtml;
+        logGrid.innerHTML = summaryHeaderHtml + cardsHtml;
     }
 
     window.setLogFilter = function(filter) {
@@ -1058,7 +1270,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.syncTimer = setInterval(fetchUserProfile, window.CONFIG.SYNC_INTERVAL_MS);
     }
 
-    // Global action bindings
+    // Global action bindings (with custom modal popups and immediate local state persistence)
     window.sellFish = async function(fishId, sellPrice, specName) {
         if (!state.userProfile) return;
 
@@ -1081,9 +1293,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Remove item from local state and re-render
         if (state.userProfile.netCatches) {
-            state.userProfile.netCatches = state.userProfile.netCatches.filter(i => i.id !== fishId);
+            state.userProfile.netCatches = state.userProfile.netCatches.filter(i => String(i.id) !== String(fishId));
         }
         renderProfileData();
+        window.showAppModal({
+            icon: '💰',
+            title: 'Fish Sold!',
+            message: `Successfully sold ${specName} for 🪙 ${sellPrice.toLocaleString()} Gold!`
+        });
     };
 
     window.sellAllNetCatches = async function() {
@@ -1115,8 +1332,14 @@ document.addEventListener('DOMContentLoaded', () => {
             state.userProfile.gold = (state.userProfile.gold || 0) + totalValue;
         }
 
+        const count = state.userProfile.netCatches.length;
         state.userProfile.netCatches = [];
         renderProfileData();
+        window.showAppModal({
+            icon: '💰',
+            title: 'Net Emptied!',
+            message: `Sold all ${count} catches from your Fishing Net for 🪙 ${totalValue.toLocaleString()} Gold!`
+        });
     };
 
     window.craftBait = async function(baitId) {
@@ -1124,25 +1347,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const baitName = baitId === 'super' ? 'Super Bait' : baitId === 'power' ? 'Power Bait' : 'Standard Bait';
         const targetTier = baitId === 'super' ? 'rare' : baitId === 'power' ? 'uncommon' : 'common';
-        // Crafting recipe counts: Standard=4 Common | Power=6 Uncommon | Super=5 Rare
         const reqCount = baitId === 'super' ? 5 : baitId === 'power' ? 6 : 4;
 
-        try {
-            const res = await fetch(`${window.CONFIG.API_BASE_URL}/api/craft/craft-bait`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: state.userProfile.id, baitType: baitId })
-            });
-
-            if (res.ok) {
-                fetchUserProfile();
-                return;
-            }
-        } catch (err) {
-            console.warn("API craft fallback:", err);
-        }
-
-        // Local state craft update
+        // Perform local craft update first
         if (state.userProfile.netCatches) {
             let removed = 0;
             state.userProfile.netCatches = state.userProfile.netCatches.filter(item => {
@@ -1165,14 +1372,33 @@ document.addEventListener('DOMContentLoaded', () => {
         if (existingInv) existingInv.quantity++;
         else state.userProfile.inventoryItems.push({ itemName: baitName, quantity: 1 });
 
+        try {
+            await fetch(`${window.CONFIG.API_BASE_URL}/api/craft/craft-bait`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: state.userProfile.id, baitType: baitId })
+            });
+        } catch (err) {
+            console.warn("API craft fallback:", err);
+        }
+
         renderProfileData();
+        window.showAppModal({
+            icon: '⚒️',
+            title: 'Bait Crafted!',
+            message: `Successfully crafted x1 ${baitName}! Saved in your Inventory. Auto-equipped on next cast!`
+        });
     };
 
     window.feedTank = async function() {
         if (!state.userProfile) return;
         const feedCost = 1000;
         if (state.userProfile.gold < feedCost) {
-            alert(`Insufficient Gold! Feeding tank requires ${feedCost} Gold.`);
+            window.showAppModal({
+                icon: '⚠️',
+                title: 'Insufficient Gold',
+                message: `Feeding the tank requires 🪙 ${feedCost.toLocaleString()} Gold.`
+            });
             return;
         }
 
@@ -1193,8 +1419,13 @@ document.addEventListener('DOMContentLoaded', () => {
             state.userProfile.gold -= feedCost;
         }
 
-        alert("🥣 Tank fish fed! 12-hour starvation timer reset.");
+        state.userProfile.lastFedAt = new Date().toISOString();
         renderProfileData();
+        window.showAppModal({
+            icon: '🥣',
+            title: 'Aquarium Fed!',
+            message: 'Tank fish fed! 12-hour starvation timer reset. Passive HP regeneration active!'
+        });
     };
 
     window.sendToTank = async function(catchId, specName) {
@@ -1202,59 +1433,75 @@ document.addEventListener('DOMContentLoaded', () => {
         const tankFish = state.userProfile.tankFish || [];
         const capacity = state.userProfile.tankCapacity || 3;
         if (tankFish.length >= capacity) {
-            alert(`Tank is full! (${tankFish.length}/${capacity} slots used). Sell or release a fish first.`);
+            window.showAppModal({
+                icon: '🚫',
+                title: 'Tank Full',
+                message: `Your Aquarium Tank is full (${tankFish.length}/${capacity} slots used). Sell a fish first.`
+            });
             return;
         }
 
+        const netCatches = state.userProfile.netCatches || [];
+        const fish = netCatches.find(c => String(c.id) === String(catchId));
+        if (fish) {
+            state.userProfile.netCatches = netCatches.filter(c => String(c.id) !== String(catchId));
+            if (!state.userProfile.tankFish) state.userProfile.tankFish = [];
+            state.userProfile.tankFish.push(fish);
+        }
+
         try {
-            const res = await fetch(`${window.CONFIG.API_BASE_URL}/api/tank/transfer`, {
+            await fetch(`${window.CONFIG.API_BASE_URL}/api/tank/transfer`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId: state.userProfile.id, catchId: catchId })
             });
-            if (res.ok) {
-                fetchUserProfile();
-                return;
-            }
         } catch (err) {
             console.warn('Transfer to tank API fallback:', err);
         }
 
-        // Local state fallback
-        const netCatches = state.userProfile.netCatches || [];
-        const fish = netCatches.find(c => c.id === catchId);
-        if (fish) {
-            state.userProfile.netCatches = netCatches.filter(c => c.id !== catchId);
-            if (!state.userProfile.tankFish) state.userProfile.tankFish = [];
-            state.userProfile.tankFish.push(fish);
-        }
         renderProfileData();
+        window.showAppModal({
+            icon: '🐠',
+            title: 'Transferred to Tank',
+            message: `${specName} was transferred into your Aquarium Tank!`
+        });
     };
 
     window.sellTankFish = async function(fishId, sellPrice, specName) {
         if (!state.userProfile) return;
-        if (!confirm(`Sell ${specName} from your tank for 🪙 ${sellPrice.toLocaleString()} Gold?`)) return;
 
-        try {
-            const res = await fetch(`${window.CONFIG.API_BASE_URL}/api/tank/sell`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: state.userProfile.id, fishId: fishId })
-            });
-            if (res.ok) {
-                const data = await res.json();
-                if (data.newGold !== undefined) state.userProfile.gold = data.newGold;
-                fetchUserProfile();
-                return;
+        window.showAppModal({
+            icon: '💰',
+            title: 'Sell Tank Fish?',
+            message: `Are you sure you want to sell ${specName} from your tank for 🪙 ${sellPrice.toLocaleString()} Gold?`,
+            confirmText: 'Sell Fish',
+            cancelText: 'Cancel',
+            onConfirm: async () => {
+                try {
+                    const res = await fetch(`${window.CONFIG.API_BASE_URL}/api/tank/sell`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ userId: state.userProfile.id, fishId: fishId })
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.newGold !== undefined) state.userProfile.gold = data.newGold;
+                    } else {
+                        state.userProfile.gold = (state.userProfile.gold || 0) + sellPrice;
+                    }
+                } catch (err) {
+                    state.userProfile.gold = (state.userProfile.gold || 0) + sellPrice;
+                }
+
+                state.userProfile.tankFish = (state.userProfile.tankFish || []).filter(f => String(f.id) !== String(fishId));
+                renderProfileData();
+                window.showAppModal({
+                    icon: '🪙',
+                    title: 'Fish Sold',
+                    message: `Sold ${specName} for 🪙 ${sellPrice.toLocaleString()} Gold!`
+                });
             }
-        } catch (err) {
-            console.warn('Sell tank fish API fallback:', err);
-        }
-
-        // Local state fallback
-        state.userProfile.gold = (state.userProfile.gold || 0) + sellPrice;
-        state.userProfile.tankFish = (state.userProfile.tankFish || []).filter(f => f.id !== fishId);
-        renderProfileData();
+        });
     };
 
     window.launchFishBattle = function() {
