@@ -589,26 +589,41 @@ document.addEventListener('DOMContentLoaded', () => {
         const hasAutoFeeder = state.userProfile && state.userProfile.hasAutoFeeder;
         const capacity = state.userProfile ? (state.userProfile.tankCapacity || 3) : 3;
 
-        // Top Action Header for Tank & Battle Arena
+        // Determine if any fish HP is below 50% OR if feed is due
+        const feedDueAt = state.userProfile && state.userProfile.lastFedAt
+            ? new Date(state.userProfile.lastFedAt).getTime() + (12 * 60 * 60 * 1000)
+            : 0;
+        const isFeedDue = Date.now() >= feedDueAt;
+        const hasLowHpFish = tankFish.some(fish => {
+            const cur = fish.currentHp !== undefined ? fish.currentHp : (fish.hp !== undefined ? fish.hp : 100);
+            const max = fish.maxHp || 100;
+            return (cur / max) < 0.5;
+        });
+        const canFeed = isFeedDue || hasLowHpFish;
+
+        // Top Action Header for Tank
         const tankHeaderHtml = `
             <div style="position: absolute; top: 15px; left: 20px; right: 20px; z-index: 50; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; background: rgba(4, 15, 30, 0.85); backdrop-filter: blur(10px); border: 1px solid rgba(0, 229, 255, 0.25); padding: 12px 20px; border-radius: var(--radius-md);">
                 <div>
                     <div style="font-weight: 700; font-size: 1rem; color: #fff; display: flex; align-items: center; gap: 8px;">
-                        <span>🐠 Aquarium Capacity:</span>
+                        <span>🐠 Aquarium:</span>
                         <span style="color: var(--accent-cyan); font-weight: 800;">${tankFish.length} / ${capacity} Slots</span>
-                        ${hasAutoFeeder ? '<span style="font-size:0.75rem; background:rgba(0,229,255,0.15); color:var(--accent-cyan); border:1px solid rgba(0,229,255,0.3); padding:2px 8px; border-radius:12px;">🤖 Auto-Feeder Active</span>' : ''}
+                        ${hasAutoFeeder ? '<span style="font-size:0.75rem; background:rgba(0,229,255,0.15); color:var(--accent-cyan); border:1px solid rgba(0,229,255,0.3); padding:2px 8px; border-radius:12px;">🤖 Auto-Feeder</span>' : ''}
+                        ${hasLowHpFish ? '<span style="font-size:0.75rem; background:rgba(244,63,94,0.15); color:var(--accent-rose); border:1px solid rgba(244,63,94,0.3); padding:2px 8px; border-radius:12px;">⚠️ Fish HP Low!</span>' : ''}
                     </div>
                     <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
-                        Feed status: 12h cycle | Passive regen (+10% HP / 30m) active while fed
+                        Feed: 12h cycle (+10% HP/30m while fed) &nbsp;|&nbsp; Battles: type <span style="color:var(--accent-gold); font-family:monospace;">!fishbattle [gold]</span> in chat
                     </div>
                 </div>
-                <div style="display: flex; gap: 10px;">
-                    <button class="btn-action btn-gold" style="width: auto; padding: 8px 18px; font-weight:700;" onclick="window.feedTank()">
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <button class="btn-action ${canFeed ? 'btn-gold' : ''}" 
+                        style="width: auto; padding: 8px 18px; font-weight:700; ${!canFeed ? 'opacity:0.4; cursor:not-allowed; background:var(--bg-secondary); border:1px solid var(--border-color);' : ''}" 
+                        onclick="window.feedTank()" ${!canFeed ? 'disabled' : ''}>
                         🥣 Feed Tank (1,000 Gold)
                     </button>
-                    <button class="btn-action" style="width: auto; padding: 8px 20px; font-weight:800; background: linear-gradient(135deg, var(--accent-rose), #e11d48); color: #fff; box-shadow: 0 0 15px rgba(244,63,94,0.4);" onclick="window.launchFishBattle()">
-                        ⚔️ Start RPG Fish Battle
-                    </button>
+                    <div style="background:rgba(244,63,94,0.12); border:1px solid rgba(244,63,94,0.3); border-radius:var(--radius-md); padding:7px 14px; font-size:0.82rem; font-weight:700; color:var(--accent-rose); display:flex; align-items:center; gap:6px;">
+                        ⚔️ <span style="color:#fff;">Battles via chat:</span>&nbsp;<code style="background:rgba(255,255,255,0.08); padding:2px 6px; border-radius:4px; color:var(--accent-gold);">!fishbattle [gold]</code>
+                    </div>
                 </div>
             </div>
         `;
@@ -630,17 +645,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 const curHp = fish.currentHp !== undefined ? fish.currentHp : (fish.hp !== undefined ? fish.hp : 100);
                 const maxHp = fish.maxHp || 100;
                 const hpPct = Math.min(100, Math.max(0, Math.floor((curHp / maxHp) * 100)));
+                const atk = fish.atk || fish.attack || (fish.species && fish.species.atk) || 0;
+                const qualityMult = fish.qualityMultiplier || 1.0;
+                const qualityLabel = qualityMult >= 1.3 ? '⭐ Perfect' : qualityMult >= 1.15 ? '✨ Good' : 'Standard';
+                const qualityColor = qualityMult >= 1.3 ? 'var(--accent-gold)' : qualityMult >= 1.15 ? 'var(--accent-cyan)' : 'var(--text-muted)';
 
-                // Swimming positions
+                // Spread out swimming positions
                 const topPos = 28 + (index * 22) % 50;
                 const leftPos = 12 + (index * 28) % 65;
 
                 return `
-                    <div class="swimming-fish-wrapper" style="top: ${topPos}%; left: ${leftPos}%;" title="${specName} (HP: ${curHp}/${maxHp})">
+                    <div class="swimming-fish-wrapper" style="top: ${topPos}%; left: ${leftPos}%;" title="${specName} (HP: ${curHp}/${maxHp} | ATK: ${atk})">
                         <img src="${fishAsset}" class="swimming-fish-img" alt="${specName}">
                         <div class="swimming-fish-label">${fish.nickname || specName}</div>
                         <div class="swimming-fish-hpbar">
-                            <div class="swimming-fish-hpfill" style="width: ${hpPct}%;"></div>
+                            <div class="swimming-fish-hpfill" style="width: ${hpPct}%; background: ${hpPct < 30 ? 'linear-gradient(90deg,#f43f5e,#fb7185)' : hpPct < 60 ? 'linear-gradient(90deg,#fb8500,#ffb703)' : 'linear-gradient(90deg,#10b981,#34d399)'}"></div>
+                        </div>
+                        <div style="font-size:0.7rem; color:var(--text-muted); text-align:center; line-height:1.4; margin-top:2px;">
+                            ❤️ ${curHp}/${maxHp} &nbsp;⚔️ ${atk} ATK<br>
+                            <span style="color:${qualityColor}; font-weight:700;">${qualityLabel} (${qualityMult.toFixed(2)}x)</span>
                         </div>
                     </div>
                 `;
@@ -670,10 +693,10 @@ document.addEventListener('DOMContentLoaded', () => {
             { name: "Golden Rod", price: 150000, desc: "-40% Cooldown (9 Minutes Cooldown)", icon: "assets/Icons/golden_rod.png", category: "Rod" },
             { name: "Divine Rod", price: 300000, desc: "-60% Cooldown (6 Minutes Cooldown)", icon: "assets/Icons/divine_rod.png", category: "Rod" },
 
-            // Baits (Purchasable or Craftable)
-            { name: "Standard Bait", price: 2000, desc: "2x odds for anything above Common (Or Craft: 4 Common)", icon: "assets/baits/standard_bait.png", category: "Bait" },
-            { name: "Power Bait", price: 7000, desc: "2x odds for anything above Uncommon (Or Craft: 6 Uncommon)", icon: "assets/baits/power_bait.png", category: "Bait" },
-            { name: "Super Bait", price: 10000, desc: "Guarantees anything above Uncommon (Or Craft: 5 Rare)", icon: "assets/baits/super_bait.png", category: "Bait" },
+            // Baits (Purchasable or Craftable) — per GAME_SPECS.md
+            { name: "Standard Bait", price: 3000, desc: "2x odds for anything above Common (Or Craft: 15 Common Fish)", icon: "assets/baits/standard_bait.png", category: "Bait" },
+            { name: "Power Bait", price: 10000, desc: "2x odds for anything above Uncommon (Or Craft: 10 Uncommon Fish)", icon: "assets/baits/power_bait.png", category: "Bait" },
+            { name: "Super Bait", price: 55000, desc: "Guarantees anything above Uncommon (Or Craft: 17 Rare Fish)", icon: "assets/baits/super_bait.png", category: "Bait" },
 
             // Consumables & Recovery Meds
             { name: "Common & Uncommon Med", price: 2500, desc: "Revives fainted Common/Uncommon fish to 50% HP", icon: "assets/Icons/common_uncommon_med.png", category: "Med" },
@@ -724,12 +747,14 @@ document.addEventListener('DOMContentLoaded', () => {
             else if (tier === 'rare') rareCount++;
         });
 
+        // Recipe counts from GAME_SPECS.md:
+        // Standard Bait: 15 Common | Power Bait: 10 Uncommon | Super Bait: 17 Rare
         const recipes = [
             {
                 id: "standard",
                 name: "Standard Bait",
                 reqTier: "Common",
-                requiredCount: 4,
+                requiredCount: 15,
                 currentCount: commonCount,
                 desc: "2x odds for anything above Common",
                 icon: "assets/baits/standard_bait.png"
@@ -738,7 +763,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 id: "power",
                 name: "Power Bait",
                 reqTier: "Uncommon",
-                requiredCount: 6,
+                requiredCount: 10,
                 currentCount: uncommonCount,
                 desc: "2x odds for anything above Uncommon",
                 icon: "assets/baits/power_bait.png"
@@ -747,7 +772,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 id: "super",
                 name: "Super Bait",
                 reqTier: "Rare",
-                requiredCount: 5,
+                requiredCount: 17,
                 currentCount: rareCount,
                 desc: "Guarantees anything above Uncommon",
                 icon: "assets/baits/super_bait.png"
@@ -1069,7 +1094,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const baitName = baitId === 'super' ? 'Super Bait' : baitId === 'power' ? 'Power Bait' : 'Standard Bait';
         const targetTier = baitId === 'super' ? 'rare' : baitId === 'power' ? 'uncommon' : 'common';
-        const reqCount = baitId === 'super' ? 5 : baitId === 'power' ? 6 : 4;
+        // Per GAME_SPECS.md: Standard = 15 Common | Power = 10 Uncommon | Super = 17 Rare
+        const reqCount = baitId === 'super' ? 17 : baitId === 'power' ? 10 : 15;
 
         try {
             const res = await fetch(`${window.CONFIG.API_BASE_URL}/api/craft/craft-bait`, {
