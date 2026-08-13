@@ -436,30 +436,75 @@ document.addEventListener('DOMContentLoaded', () => {
         const hasFreezer = state.userProfile && state.userProfile.hasDeepFreezer;
 
         if (catches.length === 0) {
-            netGrid.innerHTML = `<div style="grid-column: 1/-1; text-align:center; padding: 40px; color: var(--text-muted);">Your fishing net is currently empty! Use <b>!fish</b> in Twitch chat to make catches.</div>`;
+            netGrid.innerHTML = `
+                <div style="grid-column: 1/-1; text-align:center; padding: 50px 20px; color: var(--text-muted); background:var(--bg-glass); border:1px solid var(--border-glass); border-radius:var(--radius-lg);">
+                    <div style="font-size: 2.5rem; margin-bottom: 10px;">🎣</div>
+                    <div style="font-size: 1.1rem; font-weight: 600; color: var(--text-light);">Your Fishing Net is Currently Empty!</div>
+                    <div style="margin-top: 6px; font-size: 0.88rem;">Type <code style="color:var(--accent-gold); background:rgba(255,183,3,0.1); padding:2px 6px; border-radius:4px;">!fish</code> in Twitch chat to cast your line and catch fish!</div>
+                </div>
+            `;
             return;
         }
 
-        const decayNoticeHtml = hasFreezer 
-            ? `<div style="grid-column: 1/-1; font-size:0.85rem; color:var(--accent-cyan); background:rgba(0,229,255,0.08); border:1px solid rgba(0,229,255,0.25); padding:10px 16px; border-radius:var(--radius-md); text-align:center;">🧊 <b>Deep Freezer Active:</b> Catches in your Net stay 100% fresh for 3 days (72h) before standard decay applies!</div>`
-            : `<div style="grid-column: 1/-1; font-size:0.85rem; color:var(--accent-gold); background:rgba(255,183,3,0.08); border:1px solid rgba(255,183,3,0.25); padding:10px 16px; border-radius:var(--radius-md); text-align:center;">⏱️ <b>Decay Timer Notice:</b> Unpreserved catches decay in value after 24 hours (50% @ 24h, 40% @ 48h, 30% @ 72h, 25% floor). Purchase the <i>Deep Freezer</i> to keep catches 100% fresh for 3 days!</div>`;
+        // Calculate individual item prices and total net value
+        let totalNetValue = 0;
+        const processedCatches = catches.map(item => {
+            const specName = item.species ? (item.species.name || item.speciesName || 'Fish') : (item.speciesName || 'Fish');
+            const catalogMatch = MASTER_SPECIES_CATALOG.find(c => c.name.toLowerCase() === specName.toLowerCase());
+            
+            const itemAsset = catalogMatch ? catalogMatch.asset : (item.species && item.species.iconUrl ? item.species.iconUrl : 'assets/fish/common_fish/minnow.png');
+            const tierName = catalogMatch ? (catalogMatch.isTrash ? 'Trash' : catalogMatch.tier) : (item.species && item.species.rarity ? item.species.rarity : 'Common');
+            const basePrice = catalogMatch ? (catalogMatch.isTrash ? 5 : catalogMatch.basePrice) : 10;
+            const qualityMult = item.qualityMultiplier || 1.0;
+            const sellPrice = Math.max(1, Math.floor(basePrice * qualityMult));
+            
+            totalNetValue += sellPrice;
 
-        const cardsHtml = catches.map(item => `
+            return {
+                ...item,
+                specName,
+                itemAsset,
+                tierName,
+                sellPrice
+            };
+        });
+
+        // Top Action & Summary Bar
+        const netHeaderHtml = `
+            <div style="grid-column: 1/-1; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:15px; background:var(--bg-glass); border:1px solid var(--border-glass); padding:16px 20px; border-radius:var(--radius-lg); margin-bottom:10px;">
+                <div>
+                    <div style="font-size:1.1rem; font-weight:700; color:var(--text-light);">🎣 Net Summary</div>
+                    <div style="font-size:0.9rem; color:var(--accent-gold); font-weight:600; margin-top:2px;">
+                        Catches: <b>${catches.length}</b> &nbsp;|&nbsp; Total Net Value: <b>🪙 ${totalNetValue.toLocaleString()} Gold</b>
+                    </div>
+                </div>
+                <button class="btn-action btn-gold" style="width:auto; padding:10px 24px; font-weight:700;" onclick="window.sellAllNetCatches()">
+                    💰 Sell All (${totalNetValue.toLocaleString()} Gold)
+                </button>
+            </div>
+        `;
+
+        const decayNoticeHtml = hasFreezer 
+            ? `<div style="grid-column: 1/-1; font-size:0.85rem; color:var(--accent-cyan); background:rgba(0,229,255,0.08); border:1px solid rgba(0,229,255,0.25); padding:10px 16px; border-radius:var(--radius-md); text-align:center; margin-bottom:10px;">🧊 <b>Deep Freezer Active:</b> Catches in your Net stay 100% fresh for 3 days (72h) before standard decay applies!</div>`
+            : `<div style="grid-column: 1/-1; font-size:0.85rem; color:var(--accent-gold); background:rgba(255,183,3,0.08); border:1px solid rgba(255,183,3,0.25); padding:10px 16px; border-radius:var(--radius-md); text-align:center; margin-bottom:10px;">⏱️ <b>Decay Timer Notice:</b> Unpreserved catches decay in value after 24 hours (50% @ 24h, 40% @ 48h, 30% @ 72h, 25% floor). Purchase the <i>Deep Freezer</i> to keep catches 100% fresh for 3 days!</div>`;
+
+        const cardsHtml = processedCatches.map(item => `
             <div class="item-card">
-                <span class="item-badge rarity-${(item.species.rarity || 'common').toLowerCase()}">${item.species.rarity || 'Common'}</span>
-                <img src="${item.species.iconUrl || 'assets/Icons/sr.png'}" class="item-img" alt="${item.species.name}">
-                <div class="item-name">${item.species.name}</div>
+                <span class="item-badge rarity-${item.tierName.toLowerCase()}">${item.tierName.toUpperCase()}</span>
+                <img src="${item.itemAsset}" class="item-img" alt="${item.specName}" style="object-fit:contain; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5));">
+                <div class="item-name">${item.specName}</div>
                 <div class="item-desc">
-                    Weight: ${item.weight ? item.weight.toFixed(2) + ' lbs' : '1.0 lbs'}<br>
+                    Weight: <b>${item.weight ? item.weight.toFixed(2) + ' lbs' : '1.00 lbs'}</b><br>
+                    Value: <b style="color:var(--accent-gold);">🪙 ${item.sellPrice.toLocaleString()} Gold</b><br>
                     <span style="color:${hasFreezer ? 'var(--accent-emerald)' : 'var(--accent-gold)'}; font-size:0.78rem;">
                         ${hasFreezer ? '🧊 Preserved (3 Days Fresh)' : '⏱️ Fresh (Decays in 24h)'}
                     </span>
                 </div>
-                <button class="btn-action btn-gold" onclick="sellFish(${item.id})">Sell for Gold</button>
+                <button class="btn-action btn-gold" onclick="window.sellFish(${item.id}, ${item.sellPrice}, '${item.specName.replace(/'/g, "\\'")}')">Sell for 🪙 ${item.sellPrice.toLocaleString()} Gold</button>
             </div>
         `).join('');
 
-        netGrid.innerHTML = decayNoticeHtml + cardsHtml;
+        netGrid.innerHTML = netHeaderHtml + decayNoticeHtml + cardsHtml;
     }
 
     function renderInventoryTab() {
@@ -806,8 +851,63 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Global action bindings
-    window.sellFish = function(fishId) {
-        alert(`Selling catch #${fishId}...`);
-        fetchUserProfile();
+    window.sellFish = async function(fishId, sellPrice, specName) {
+        if (!state.userProfile) return;
+
+        try {
+            const res = await fetch(`${window.CONFIG.API_BASE_URL}/api/net/sell-one`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: state.userProfile.id, catchId: fishId })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                if (data.newGold !== undefined) state.userProfile.gold = data.newGold;
+            } else {
+                state.userProfile.gold = (state.userProfile.gold || 0) + (sellPrice || 0);
+            }
+        } catch (err) {
+            state.userProfile.gold = (state.userProfile.gold || 0) + (sellPrice || 0);
+        }
+
+        // Remove item from local state and re-render
+        if (state.userProfile.netCatches) {
+            state.userProfile.netCatches = state.userProfile.netCatches.filter(i => i.id !== fishId);
+        }
+        renderProfileData();
+    };
+
+    window.sellAllNetCatches = async function() {
+        if (!state.userProfile || !state.userProfile.netCatches || state.userProfile.netCatches.length === 0) return;
+
+        let totalValue = 0;
+        state.userProfile.netCatches.forEach(item => {
+            const specName = item.species ? (item.species.name || item.speciesName || '') : '';
+            const catalogMatch = MASTER_SPECIES_CATALOG.find(c => c.name.toLowerCase() === specName.toLowerCase());
+            const basePrice = catalogMatch ? (catalogMatch.isTrash ? 5 : catalogMatch.basePrice) : 10;
+            const qualityMult = item.qualityMultiplier || 1.0;
+            totalValue += Math.max(1, Math.floor(basePrice * qualityMult));
+        });
+
+        try {
+            const res = await fetch(`${window.CONFIG.API_BASE_URL}/api/net/sell-all`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: state.userProfile.id })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                if (data.newGold !== undefined) state.userProfile.gold = data.newGold;
+            } else {
+                state.userProfile.gold = (state.userProfile.gold || 0) + totalValue;
+            }
+        } catch (err) {
+            state.userProfile.gold = (state.userProfile.gold || 0) + totalValue;
+        }
+
+        state.userProfile.netCatches = [];
+        renderProfileData();
     };
 });
