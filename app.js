@@ -741,7 +741,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 <span class="item-badge rarity-${profile.hasFishingVessel ? 'uncommon' : 'common'}">${profile.hasFishingVessel ? 'UNLOCKED' : 'LOCKED'}</span>
                 <img src="assets/Icons/fishing_vessel.png" class="item-img" alt="Fishing Vessel">
                 <div class="item-name">Fishing Vessel</div>
-                <div class="item-desc">Enables offshore catches & double    function renderTankTab() {
+                <div class="item-desc">Enables offshore catches & double weight rolls.</div>
+            </div>
+        `;
+    }
+
+    function renderTankTab() {
         const tankInfoPanel = document.getElementById('tankInfoPanel');
         const tankVisualizer = document.getElementById('tankVisualizer');
         if (!tankVisualizer) return;
