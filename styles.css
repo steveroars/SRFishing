@@ -808,6 +808,143 @@ body {
     gap: 6px;
 }
 
+/* RPG Battle Theater - Team vs Team Combat */
+.rpg-theater {
+    display: grid;
+    grid-template-columns: 1fr 100px 1fr;
+    align-items: stretch;
+    gap: 16px;
+    background: rgba(2, 10, 24, 0.8);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+}
+
+.rpg-team-column {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.rpg-team-title {
+    text-align: center;
+    font-size: 0.8rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 6px;
+}
+
+.rpg-team-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.rpg-fish-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(14, 20, 32, 0.9);
+    border: 1px solid #232D40;
+    border-radius: 10px;
+    padding: 8px 10px;
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.rpg-fish-card.attacking {
+    border-color: var(--accent-gold);
+    box-shadow: 0 0 18px rgba(255, 183, 3, 0.45);
+    transform: translateX(-6px) scale(1.03);
+}
+
+.rpg-fish-card.taking-hit {
+    border-color: var(--accent-rose);
+    box-shadow: 0 0 18px rgba(244, 63, 94, 0.5);
+    animation: hitShake 0.35s ease;
+}
+
+.rpg-fish-card.fainted {
+    opacity: 0.45;
+    filter: grayscale(1);
+    border-color: #7f1d1d;
+}
+
+.rpg-fish-thumb {
+    width: 52px;
+    height: 52px;
+    object-fit: contain;
+    background: #151C2B;
+    border-radius: 8px;
+}
+
+.rpg-fish-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.rpg-fish-name {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.rpg-hp-bar-bg {
+    width: 100%;
+    height: 9px;
+    background: rgba(0, 0, 0, 0.6);
+    border-radius: 5px;
+    overflow: hidden;
+    margin-top: 4px;
+}
+
+.rpg-hp-bar-fill {
+    height: 100%;
+    border-radius: 5px;
+    background: linear-gradient(90deg, #10b981, #34d399);
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.rpg-hp-text {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.dmg-pop {
+    position: absolute;
+    right: 8px;
+    top: 4px;
+    font-size: 1rem;
+    font-weight: 900;
+    color: var(--accent-rose);
+    text-shadow: 0 0 10px rgba(244, 63, 94, 0.8);
+    pointer-events: none;
+    animation: dmgFloat 0.9s ease forwards;
+    z-index: 5;
+}
+
+@keyframes dmgFloat {
+    0% { opacity: 1; transform: translateY(0) scale(1); }
+    100% { opacity: 0; transform: translateY(-28px) scale(1.25); }
+}
+
+@keyframes hitShake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-7px); }
+    50% { transform: translateX(6px); }
+    75% { transform: translateX(-4px); }
+}
+
 /* Cooldown Timer Widget */
 .cooldown-widget {
     background: var(--bg-card);

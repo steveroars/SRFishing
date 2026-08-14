@@ -874,6 +874,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         onclick="window.feedTank()" ${!canFeed ? 'disabled' : ''}>
                         🥣 Feed Tank (1,000 Gold)
                     </button>
+                    <button class="btn-action btn-gold" style="width:auto; padding:10px 20px; font-weight:800;"
+                        onclick="window.startAiBattle()" title="Challenge a random Wild Tank (100 Gold wager)">
+                        ⚔️ Fight AI Battle
+                    </button>
                     <div style="background:rgba(244,63,94,0.12); border:1px solid rgba(244,63,94,0.3); border-radius:var(--radius-md); padding:8px 16px; font-size:0.8rem; font-weight:600; color:#fff; line-height:1.5;">
                         ⚔️ <b style="color:var(--accent-rose);">Chat Battles:</b><br>
                         <code style="color:var(--accent-gold); font-size:0.78rem;">!fishbattle [gold]</code> — vs random<br>
@@ -1538,8 +1542,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Exposed globally so inline onclick handlers (e.g. the battle modal Close button) can call it
     window.setTankBattleMode = setTankBattleMode;
 
-    // Poll the backend for the most recent battle; when a NEW battle result appears, fish line up
-    // in a straight line for the duration of the combat animation, then resume idle drifting.
+    // Poll the backend for the most recent battle; when a NEW battle result appears,
+    // open the RPG battle theater so the player sees the whole combat play out with HP bars.
     async function checkLatestBattle() {
         if (!state.userProfile || !state.userProfile.id) return;
         try {
@@ -1552,20 +1556,243 @@ document.addEventListener('DOMContentLoaded', () => {
             if (state.lastBattleSeenAt === battleTime) return; // already handled this battle
             state.lastBattleSeenAt = battleTime;
 
-            const logCount = (data.result.combatLogs || []).length;
-            const battleDurationMs = Math.max(2500, logCount * 750 + 1200);
-
-            setTankBattleMode(true);
-            state.tankBattleEndTimer = setTimeout(() => {
-                state.tankBattleActive = false;
-                const vis = document.getElementById('tankVisualizer');
-                if (vis) vis.classList.remove('tank-battle');
-                renderProfileData(true);
-            }, battleDurationMs);
+            showRpgBattleModal(data.result);
         } catch (err) {
             // ignore transient polling errors
         }
     }
+
+    // Full RPG-style battle playback modal (Your Tank vs Wild Tank), driven by the
+    // BattleResult returned from the backend so the HP bars match the real combat logs.
+    window.showRpgBattleModal = function(result) {
+        if (!result) return;
+
+        // Remove any existing battle modal first
+        const existing = document.getElementById('battleModalOverlay');
+        if (existing) existing.remove();
+
+        // Fish line up in the tank while combat is playing
+        setTankBattleMode(true);
+
+        const pTeam = (result.playerTeam || []).map((m, i) => ({
+            key: `p${i}`,
+            name: m.name || 'Fish',
+            asset: m.assetPath || 'assets/Icons/sr.png',
+            hp: m.startHp || m.maxHp || 1,
+            maxHp: m.maxHp || m.startHp || 1,
+            atk: m.atk || 0
+        }));
+        const aTeam = (result.aiTeam || []).map((m, i) => ({
+            key: `a${i}`,
+            name: m.name || 'Fish',
+            asset: m.assetPath || 'assets/Icons/sr.png',
+            hp: m.startHp || m.maxHp || 1,
+            maxHp: m.maxHp || m.startHp || 1,
+            atk: m.atk || 0
+        }));
+        const logs = result.combatLogs || [];
+
+        const overlay = document.createElement('div');
+        overlay.className = 'battle-overlay';
+        overlay.id = 'battleModalOverlay';
+        overlay.innerHTML = `
+            <div class="battle-arena-card">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <h2 style="font-size:1.4rem; font-weight:800; color:var(--accent-cyan);">⚔️ TANK BATTLE ARENA</h2>
+                    <span class="item-badge rarity-legendary" id="battleWagerBadge">🪙 ${result.wager || 100} GOLD</span>
+                </div>
+
+                <div class="rpg-theater">
+                    <div class="rpg-team-column">
+                        <div class="rpg-team-title">🛡️ YOUR TANK</div>
+                        <div class="rpg-team-list" id="rpgPlayerTeam"></div>
+                    </div>
+                    <div class="battle-vs-badge">VS</div>
+                    <div class="rpg-team-column">
+                        <div class="rpg-team-title">🐉 WILD TANK</div>
+                        <div class="rpg-team-list" id="rpgAiTeam"></div>
+                    </div>
+                </div>
+
+                <div class="battle-log-box" id="battleLogBox">
+                    <div style="color:var(--text-muted); text-align:center;">⚔️ Combat starting...</div>
+                </div>
+
+                <div style="display:flex; justify-content:flex-end; gap:12px;">
+                    <button class="btn-action" id="battleSkipBtn" style="width:auto; padding:10px 20px; background:rgba(255,255,255,0.1);">⏩ Fast Forward</button>
+                    <button class="btn-action btn-gold" id="battleCloseBtn" style="width:auto; padding:10px 28px; font-weight:800; display:none;">🏁 Continue</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+
+        const playerListEl = document.getElementById('rpgPlayerTeam');
+        const aiListEl = document.getElementById('rpgAiTeam');
+        const logBox = document.getElementById('battleLogBox');
+        const skipBtn = document.getElementById('battleSkipBtn');
+        const closeBtn = document.getElementById('battleCloseBtn');
+
+        function renderTeamCard(fish) {
+            const hpPct = Math.max(0, Math.min(100, Math.floor((fish.hp / fish.maxHp) * 100)));
+            const hpColor = hpPct > 50 ? '#10b981' : (hpPct > 20 ? '#f59e0b' : '#ef4444');
+            return `
+                <div class="rpg-fish-card" id="${fish.key}">
+                    <img src="${fish.asset}" class="rpg-fish-thumb" onerror="this.onerror=null; this.src='assets/Icons/sr.png';">
+                    <div class="rpg-fish-info">
+                        <div class="rpg-fish-name">${fish.name}</div>
+                        <div class="rpg-hp-bar-bg"><div class="rpg-hp-bar-fill" id="${fish.key}-fill" style="width:${hpPct}%; background:${hpColor};"></div></div>
+                        <div class="rpg-hp-text"><span id="${fish.key}-hp">HP: ${fish.hp}/${fish.maxHp}</span><span>ATK: ${fish.atk}</span></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderAllTeams() {
+            playerListEl.innerHTML = pTeam.map(renderTeamCard).join('');
+            aiListEl.innerHTML = aTeam.map(renderTeamCard).join('');
+        }
+
+        function findFish(name) {
+            return [...pTeam, ...aTeam].find(f => f.name.toLowerCase() === (name || '').toLowerCase());
+        }
+
+        function updateFishHp(fish) {
+            const hpPct = Math.max(0, Math.min(100, Math.floor((fish.hp / fish.maxHp) * 100)));
+            const hpColor = hpPct > 50 ? '#10b981' : (hpPct > 20 ? '#f59e0b' : '#ef4444');
+            const fill = document.getElementById(`${fish.key}-fill`);
+            const hpText = document.getElementById(`${fish.key}-hp`);
+            const card = document.getElementById(fish.key);
+            if (fill) { fill.style.width = hpPct + '%'; fill.style.background = hpColor; }
+            if (hpText) hpText.textContent = `HP: ${fish.hp}/${fish.maxHp}`;
+            if (card) {
+                if (fish.hp <= 0) card.classList.add('fainted');
+                else card.classList.remove('fainted');
+            }
+        }
+
+        renderAllTeams();
+
+        let turnIdx = 0;
+        let battleTimer = null;
+
+        function finishBattle() {
+            if (battleTimer) { clearInterval(battleTimer); battleTimer = null; }
+
+            const isWin = result.player1Won === true;
+            const goldWon = result.goldWon || result.wager || 100;
+            const resultDiv = document.createElement('div');
+            resultDiv.style.marginTop = '6px';
+            resultDiv.style.padding = '8px';
+            resultDiv.style.borderRadius = '8px';
+            resultDiv.style.textAlign = 'center';
+            resultDiv.style.fontWeight = '800';
+            if (isWin) {
+                resultDiv.innerHTML = `🏆 VICTORY! You won 🪙 ${goldWon} Gold!<br><span style="font-size:0.8rem; font-weight:400;">Surviving fish gained +5% stat growth!</span>`;
+                resultDiv.style.background = 'rgba(16,185,129,0.15)';
+                resultDiv.style.color = 'var(--accent-emerald)';
+            } else {
+                resultDiv.innerHTML = `💀 DEFEAT! You lost 🪙 ${result.wager || 100} Gold.<br><span style="font-size:0.8rem; font-weight:400;">Fainted fish require Recovery Meds to revive.</span>`;
+                resultDiv.style.background = 'rgba(244,63,94,0.15)';
+                resultDiv.style.color = 'var(--accent-rose)';
+            }
+            logBox.appendChild(resultDiv);
+            logBox.scrollTop = logBox.scrollHeight;
+
+            skipBtn.style.display = 'none';
+            closeBtn.style.display = 'inline-block';
+
+            // Fish go back to idle drifting; profile refresh updates any fainted survivors / gold
+            setTankBattleMode(false);
+            fetchUserProfile(true);
+        }
+
+
+        function stepTurn() {
+            if (turnIdx >= logs.length) {
+                finishBattle();
+                return;
+            }
+            const step = logs[turnIdx];
+            turnIdx++;
+
+            const attacker = findFish(step.attackerName);
+            const defender = findFish(step.defenderName);
+            const dmg = step.damageDealt || 0;
+
+            // Attacker lunges & defender shakes
+            if (attacker) {
+                const aCard = document.getElementById(attacker.key);
+                if (aCard) {
+                    aCard.classList.add('attacking');
+                    setTimeout(() => aCard.classList.remove('attacking'), 500);
+                }
+            }
+            if (defender) {
+                const dCard = document.getElementById(defender.key);
+                if (dCard) {
+                    dCard.classList.add('taking-hit');
+                    setTimeout(() => dCard.classList.remove('taking-hit'), 500);
+                    // Damage popup
+                    const pop = document.createElement('span');
+                    pop.className = 'dmg-pop';
+                    pop.textContent = `-${dmg}`;
+                    dCard.appendChild(pop);
+                    setTimeout(() => pop.remove(), 950);
+                }
+                // HP goes down to the remaining HP recorded by the engine
+                const remHp = Math.max(0, step.defenderRemainingHp !== undefined ? step.defenderRemainingHp : (defender.hp - dmg));
+                defender.hp = remHp;
+                updateFishHp(defender);
+            }
+
+            const entry = document.createElement('div');
+            const isPlayerAttack = !!attacker && pTeam.includes(attacker);
+            entry.innerHTML = `<strong>${step.attackerName || 'Fish'}</strong> attacked <strong>${step.defenderName || 'Target'}</strong> for <span style="color:#EF4444; font-weight:800;">${dmg} DMG</span>${step.defenderFainted ? ' 💀 <b>FAINTED!</b>' : ''}`;
+            if (isPlayerAttack) entry.style.color = 'var(--accent-gold)';
+            logBox.appendChild(entry);
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        // Start the playback
+        skipBtn.addEventListener('click', finishBattle);
+        closeBtn.addEventListener('click', () => {
+            overlay.remove();
+            setTankBattleMode(false);
+            fetchUserProfile(true);
+        });
+
+        if (logs.length === 0) {
+            finishBattle();
+        } else {
+            battleTimer = setInterval(stepTurn, 800);
+        }
+    };
+
+    // Launch an AI battle right from the Tank tab via the backend engine
+    window.startAiBattle = async function() {
+        if (!state.userProfile) return;
+        if (!state.userProfile.tankFish || state.userProfile.tankFish.length === 0) {
+            window.showAppModal({ icon: '🐠', title: 'No Battle Fish', message: 'Your tank is empty! Transfer fish from your Fishing Net first.' });
+            return;
+        }
+        const wager = 100;
+        try {
+            const res = await fetch(`${window.CONFIG.API_BASE_URL}/api/Battle/ai`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: state.userProfile.id, wager })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                window.showAppModal({ icon: '⚠️', title: 'Battle Failed', message: data.message || 'Could not start the battle.' });
+                return;
+            }
+            showRpgBattleModal(data);
+        } catch (err) {
+            console.warn('AI battle error:', err);
+            window.showAppModal({ icon: '⚠️', title: 'Battle Failed', message: 'Could not reach the battle server. Try again.' });
+        }
+    };
 
     function startAutoSync() {
         if (state.syncTimer) clearInterval(state.syncTimer);
