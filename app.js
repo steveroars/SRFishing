@@ -1014,16 +1014,16 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Baits / Meds / Consumables
+        // Baits / Meds / Consumables (Matches ItemType enum values 1-8)
         let itemEnum = null;
-        if (itemName === 'Standard Bait') itemEnum = 0;
-        else if (itemName === 'Power Bait') itemEnum = 1;
-        else if (itemName === 'Super Bait') itemEnum = 2;
-        else if (itemName === 'Trophy Bait') itemEnum = 3;
-        else if (itemName === 'Common & Uncommon Med') itemEnum = 4;
-        else if (itemName === 'Rare & Legendary Med') itemEnum = 5;
-        else if (itemName === 'Mythical & Divine Med') itemEnum = 6;
-        else if (itemName === 'Fish Eggs') itemEnum = 7;
+        if (itemName === 'Standard Bait') itemEnum = 1;
+        else if (itemName === 'Power Bait') itemEnum = 2;
+        else if (itemName === 'Super Bait') itemEnum = 3;
+        else if (itemName === 'Trophy Bait') itemEnum = 4;
+        else if (itemName === 'Common & Uncommon Med') itemEnum = 5;
+        else if (itemName === 'Rare & Legendary Med') itemEnum = 6;
+        else if (itemName === 'Mythical & Divine Med') itemEnum = 7;
+        else if (itemName === 'Fish Eggs') itemEnum = 8;
 
         if (itemEnum !== null) {
             try {
@@ -1074,6 +1074,33 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (e) {
                 window.showAppModal({ icon: '❌', title: 'Error', message: 'Failed to connect to shop service.' });
             }
+        }
+    };
+
+    window.craftBait = async function(recipeId) {
+        if (!state.userProfile) return;
+
+        let targetBaitEnum = 1; // Standard Bait = 1
+        if (recipeId === 'power') targetBaitEnum = 2; // Power Bait = 2
+        else if (recipeId === 'super') targetBaitEnum = 3; // Super Bait = 3
+
+        try {
+            const res = await fetch(`${window.CONFIG.API_BASE_URL}/api/Craft/craft-bait`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: state.userProfile.id, targetBait: targetBaitEnum, baitType: recipeId })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                window.showAppModal({ icon: '⚒️', title: 'Bait Crafted!', message: data.message });
+                await fetchUserProfile();
+            } else {
+                const err = await res.text();
+                window.showAppModal({ icon: '❌', title: 'Crafting Failed', message: err });
+            }
+        } catch (e) {
+            window.showAppModal({ icon: '❌', title: 'Error', message: 'Failed to connect to crafting service.' });
         }
     };
 
