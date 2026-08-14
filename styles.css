@@ -636,9 +636,34 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
+    width: 170px;
+    margin-left: -85px; /* center the card on its left% position */
     transition: left 3.5s ease-in-out, top 3.5s ease-in-out, transform 0.5s ease;
     cursor: pointer;
     z-index: 10;
+    animation: fishDrift 13s ease-in-out infinite;
+}
+
+/* Idle float-around animation (gentle slow drifting while resting in the tank) */
+@keyframes fishDrift {
+    0%   { transform: translate(0px, 0px); }
+    20%  { transform: translate(10px, -10px); }
+    40%  { transform: translate(-8px, -16px); }
+    60%  { transform: translate(-18px, -8px); }
+    80%  { transform: translate(-6px, 5px); }
+    100% { transform: translate(0px, 0px); }
+}
+
+/* During battle: fish line up in a straight line and hold still until combat completes */
+.tank-visualizer.tank-battle .swimming-fish-wrapper,
+.tank-visualizer.tank-battle .swimming-fish-img {
+    animation: none !important;
+}
+
+/* Fainted fish: completely static (no drift, no bobbing) */
+.swimming-fish-wrapper.is-fainted,
+.swimming-fish-wrapper.is-fainted .swimming-fish-img {
+    animation: none !important;
 }
 
 .swimming-fish-img {

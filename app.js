@@ -10,7 +10,10 @@ document.addEventListener('DOMContentLoaded', () => {
         activeLogFilter: 'all',
         activeRankSubTab: 'catches',
         cooldownTimerInterval: null,
-        syncTimer: null
+        syncTimer: null,
+        tankBattleActive: false,
+        lastBattleSeenAt: null,
+        tankBattleEndTimer: null
     };
 
     // Custom In-App Modal Dialog Utility (Replaces native alert/confirm popups)
@@ -908,12 +911,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 const aliveSell = Math.max(1, Math.floor(basePrice * qualityMult));
                 const sellVal = isFainted ? Math.floor(aliveSell * 0.5) : aliveSell;
 
-                // Spread out swimming positions
-                const topPos = 20 + (index * 24) % 55;
-                const leftPos = 10 + (index * 30) % 70;
+                // Horizontal lineup: evenly spread fish across the tank so all stats & sell buttons stay in frame
+                const fishCount = tankFish.length;
+                const topPos = 22;
+                const leftPos = fishCount === 1 ? 50 : 12 + (index * (76 / (fishCount - 1)));
 
                 return `
-                    <div class="swimming-fish-wrapper" style="top: ${topPos}%; left: ${leftPos}%;" title="${specName} (HP: ${curHp}/${maxHp} | ATK: ${atk})">
+                    <div class="swimming-fish-wrapper ${isFainted ? 'is-fainted' : ''}" style="top: ${topPos}%; left: ${leftPos}%;" title="${specName} (HP: ${curHp}/${maxHp} | ATK: ${atk})">
                         <img src="${fishAsset}" class="swimming-fish-img" alt="${specName}" style="${isFainted ? 'filter: grayscale(1) drop-shadow(0 6px 12px rgba(0,0,0,0.6)); opacity:0.6;' : 'filter: drop-shadow(0 6px 12px rgba(0,0,0,0.6));'}">
                         <div class="swimming-fish-label">${fish.nickname || specName}${isFainted ? ' 💀' : ''}</div>
                         <div class="swimming-fish-hpbar">
@@ -939,6 +943,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const delay = Math.random() * 4;
             bubblesHtml += `<div class="bubble" style="width:${size}px; height:${size}px; left:${left}%; animation-delay:${delay}s;"></div>`;
         }
+
+        // Toggle battle lineup mode on the tank (stops idle drifting; fish form a straight line)
+        tankVisualizer.classList.toggle('tank-battle', !!state.tankBattleActive);
 
         tankVisualizer.innerHTML = bubblesHtml + fishHtml;
     }
@@ -1518,9 +1525,54 @@ document.addEventListener('DOMContentLoaded', () => {
         updateUserHeaderUI();
     }
 
+    function setTankBattleMode(active) {
+        state.tankBattleActive = !!active;
+        if (state.tankBattleEndTimer) {
+            clearTimeout(state.tankBattleEndTimer);
+            state.tankBattleEndTimer = null;
+        }
+        const vis = document.getElementById('tankVisualizer');
+        if (vis) vis.classList.toggle('tank-battle', state.tankBattleActive);
+        renderProfileData(true);
+    }
+    // Exposed globally so inline onclick handlers (e.g. the battle modal Close button) can call it
+    window.setTankBattleMode = setTankBattleMode;
+
+    // Poll the backend for the most recent battle; when a NEW battle result appears, fish line up
+    // in a straight line for the duration of the combat animation, then resume idle drifting.
+    async function checkLatestBattle() {
+        if (!state.userProfile || !state.userProfile.id) return;
+        try {
+            const res = await fetch(`${window.CONFIG.API_BASE_URL}/api/Battle/latest/${encodeURIComponent(state.userProfile.id)}`);
+            if (!res.ok) return;
+            const data = await res.json();
+            if (!data || !data.result) return;
+
+            const battleTime = data.createdAt;
+            if (state.lastBattleSeenAt === battleTime) return; // already handled this battle
+            state.lastBattleSeenAt = battleTime;
+
+            const logCount = (data.result.combatLogs || []).length;
+            const battleDurationMs = Math.max(2500, logCount * 750 + 1200);
+
+            setTankBattleMode(true);
+            state.tankBattleEndTimer = setTimeout(() => {
+                state.tankBattleActive = false;
+                const vis = document.getElementById('tankVisualizer');
+                if (vis) vis.classList.remove('tank-battle');
+                renderProfileData(true);
+            }, battleDurationMs);
+        } catch (err) {
+            // ignore transient polling errors
+        }
+    }
+
     function startAutoSync() {
         if (state.syncTimer) clearInterval(state.syncTimer);
-        state.syncTimer = setInterval(fetchUserProfile, window.CONFIG.SYNC_INTERVAL_MS);
+        state.syncTimer = setInterval(async () => {
+            await fetchUserProfile(true);
+            checkLatestBattle();
+        }, window.CONFIG.SYNC_INTERVAL_MS);
     }
 
     // Global action bindings (with custom modal popups and immediate local state persistence)
@@ -1769,6 +1821,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Fish line up for the battle
+        setTankBattleMode(true);
+
         const myFish = tankFish[0];
         const mySpecName = myFish.species ? (myFish.species.name || myFish.speciesName || 'Golden Carp') : (myFish.speciesName || 'Golden Carp');
         const catalogMatch = MASTER_SPECIES_CATALOG.find(c => c.name.toLowerCase() === mySpecName.toLowerCase());
@@ -1842,7 +1897,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <button class="btn-action btn-gold" id="btnAutoBattle" style="width:auto; padding:10px 28px; font-weight:800;">
                         🔥 Fight Battle!
                     </button>
-                    <button class="btn-action" style="width:auto; padding:10px 20px; background:rgba(255,255,255,0.1);" onclick="document.getElementById('battleModalOverlay').remove()">
+                    <button class="btn-action" style="width:auto; padding:10px 20px; background:rgba(255,255,255,0.1);" onclick="document.getElementById('battleModalOverlay').remove(); setTankBattleMode(false);">
                         Close
                     </button>
                 </div>
@@ -1865,6 +1920,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const fightLoop = setInterval(() => {
                 if (myCurHp <= 0 || bossCurHp <= 0) {
                     clearInterval(fightLoop);
+                    // Fish return to idle drifting once combat completes
+                    setTankBattleMode(false);
                     
                     const win = myCurHp > 0;
                     if (win) {
