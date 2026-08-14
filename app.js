@@ -316,6 +316,15 @@ document.addEventListener('DOMContentLoaded', () => {
         renderLoggedOutState();
     }
 
+    function startAutoSync() {
+        if (state.syncTimer) clearInterval(state.syncTimer);
+        state.syncTimer = setInterval(async () => {
+            if (state.currentUser) {
+                await fetchUserProfile(true);
+            }
+        }, (window.CONFIG && window.CONFIG.SYNC_INTERVAL_MS) || 4000);
+    }
+
     // 2. Fetch Profile from JRMA Backend API
     function getProfileStorageKey(userId) {
         return 'srf_user_profile_' + (userId || 'viewer_demo');
@@ -341,7 +350,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 2. Fetch Profile from JRMA Backend API (With Persistent Local State Merging)
-    async function fetchUserProfile() {
+    async function fetchUserProfile(isSilent = false) {
         if (!state.currentUser) {
             state.currentUser = { id: "viewer_demo", displayName: "ViewerDemo", username: "viewerdemo" };
         }
@@ -354,29 +363,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (res.ok) {
                 const serverData = await res.json();
-                const localSaved = loadLocalProfile(userId);
-
-                if (localSaved) {
-                    state.userProfile = {
-                        ...serverData,
-                        gold: Math.max(serverData.gold || 0, localSaved.gold || 0),
-                        netCatches: localSaved.netCatches !== undefined ? localSaved.netCatches : (serverData.netCatches || []),
-                        inventoryItems: localSaved.inventoryItems !== undefined ? localSaved.inventoryItems : (serverData.inventoryItems || []),
-                        tankFish: localSaved.tankFish !== undefined ? localSaved.tankFish : (serverData.tankFish || []),
-                        lastDailyClaimTime: localSaved.lastDailyClaimTime || serverData.lastDailyClaimTime,
-                        lastFedAt: localSaved.lastFedAt || serverData.lastFedAt
-                    };
-                } else {
-                    state.userProfile = serverData;
-                }
-
+                state.userProfile = serverData;
                 saveLocalProfile();
-                renderProfileData();
-            } else {
+                renderProfileData(isSilent);
+            } else if (!isSilent) {
                 renderFallbackProfileData();
             }
         } catch (err) {
-            renderFallbackProfileData();
+            if (!isSilent) renderFallbackProfileData();
         }
     }
 
@@ -398,7 +392,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 hasFishingVessel: false,
                 hasFishingNet: true,
                 cooldownTotalSeconds: 900,
-                remainingCooldownSeconds: 320,
+                remainingCooldownSeconds: 0,
                 netCatches: [
                     { id: 'cat_1', species: { name: "Rainbow Trout", rarity: "Common", iconUrl: "assets/fish/common_fish/rainbow_trout.png" }, weight: 3.4, qualityMultiplier: 1.0 },
                     { id: 'cat_2', species: { name: "Largemouth Bass", rarity: "Uncommon", iconUrl: "assets/fish/uncommon_fish/largemouth_bass.png" }, weight: 8.2, qualityMultiplier: 1.15 },
@@ -426,7 +420,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderProfileData();
     }
 
-    function renderProfileData() {
+    function renderProfileData(isSilent = false) {
         if (!state.userProfile) return;
 
         // Save local state to localStorage on every render so actions persist
@@ -450,7 +444,11 @@ document.addEventListener('DOMContentLoaded', () => {
         startCooldownTicker();
 
         // Render Active Tab
-        renderCurrentTabContent();
+        if (!isSilent) {
+            renderCurrentTabContent();
+        } else if (state.activeTab === 'net' || state.activeTab === 'tank') {
+            renderCurrentTabContent();
+        }
     }
 
     function startCooldownTicker() {
@@ -756,7 +754,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     <img src="${icon}" class="item-img" alt="${name}" style="object-fit:contain;">
                     <div class="item-name">${name}</div>
                     <div class="item-desc">Quantity: <b>x${item.quantity}</b></div>
-                    <button class="btn-action btn-gold">Equip / Use</button>
                 </div>
             `;
         }).join('');
