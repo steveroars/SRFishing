@@ -420,6 +420,22 @@ document.addEventListener('DOMContentLoaded', () => {
         renderProfileData();
     }
 
+    function syncCooldownTime(remainingSeconds) {
+        if (typeof remainingSeconds === 'number' && remainingSeconds > 0) {
+            const targetEnd = Date.now() + (remainingSeconds * 1000);
+            if (!state.cooldownEndTime || Math.abs(state.cooldownEndTime - targetEnd) > 2000) {
+                state.cooldownEndTime = targetEnd;
+            }
+        } else if (remainingSeconds === 0) {
+            state.cooldownEndTime = 0;
+        }
+    }
+
+    function getRemainingCooldownSecs() {
+        if (!state.cooldownEndTime || state.cooldownEndTime <= Date.now()) return 0;
+        return Math.max(0, Math.ceil((state.cooldownEndTime - Date.now()) / 1000));
+    }
+
     function renderProfileData(isSilent = false) {
         if (!state.userProfile) return;
 
@@ -440,7 +456,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const statRod = document.getElementById('statRod');
         if (statRod) statRod.textContent = state.userProfile.activeRod || "Default Rod";
 
-        // Start 1-second ticker for smooth countdown
+        // Anchor timestamp-based cooldown
+        syncCooldownTime(state.userProfile.remainingCooldownSeconds || 0);
+
+        // Start 1-second ticker for smooth countdown (runs continuously)
         startCooldownTicker();
 
         // Render Active Tab
@@ -452,28 +471,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function startCooldownTicker() {
-        if (state.cooldownTimerInterval) clearInterval(state.cooldownTimerInterval);
-
-        updateCooldownUI(state.userProfile ? (state.userProfile.remainingCooldownSeconds || 0) : 0);
+        updateCooldownUI();
         updateDailyClaimUI();
 
+        if (state.cooldownTimerInterval) return;
+
         state.cooldownTimerInterval = setInterval(() => {
-            if (!state.userProfile) return;
-
-            if (state.userProfile.remainingCooldownSeconds > 0) {
-                state.userProfile.remainingCooldownSeconds--;
-                updateCooldownUI(state.userProfile.remainingCooldownSeconds);
-            } else {
-                updateCooldownUI(0);
-            }
-
+            updateCooldownUI();
             updateDailyClaimUI();
         }, 1000);
     }
 
-    function updateCooldownUI(secondsRemaining) {
+    function updateCooldownUI() {
         const timerEl = document.getElementById('cooldownTimerVal');
         if (!timerEl) return;
+
+        const secondsRemaining = getRemainingCooldownSecs();
 
         if (secondsRemaining <= 0) {
             timerEl.textContent = "READY TO FISH!";
