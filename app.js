@@ -317,16 +317,60 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 2. Fetch Profile from JRMA Backend API
+    function getProfileStorageKey(userId) {
+        return 'srf_user_profile_' + (userId || 'viewer_demo');
+    }
+
+    function saveLocalProfile() {
+        if (!state.userProfile) return;
+        const key = getProfileStorageKey(state.userProfile.id);
+        localStorage.setItem(key, JSON.stringify(state.userProfile));
+    }
+
+    function loadLocalProfile(userId) {
+        const key = getProfileStorageKey(userId);
+        const saved = localStorage.getItem(key);
+        if (saved) {
+            try {
+                return JSON.parse(saved);
+            } catch (e) {
+                console.warn("Failed parsing saved profile:", e);
+            }
+        }
+        return null;
+    }
+
+    // 2. Fetch Profile from JRMA Backend API (With Persistent Local State Merging)
     async function fetchUserProfile() {
-        if (!state.currentUser) return;
+        if (!state.currentUser) {
+            state.currentUser = { id: "viewer_demo", displayName: "ViewerDemo", username: "viewerdemo" };
+        }
+
+        const userId = state.currentUser.id;
 
         try {
-            const url = `${window.CONFIG.API_BASE_URL}/api/User/${state.currentUser.id}?username=${encodeURIComponent(state.currentUser.username)}`;
+            const url = `${window.CONFIG.API_BASE_URL}/api/User/${userId}?username=${encodeURIComponent(state.currentUser.username)}`;
             const res = await fetch(url);
 
             if (res.ok) {
-                const data = await res.json();
-                state.userProfile = data;
+                const serverData = await res.json();
+                const localSaved = loadLocalProfile(userId);
+
+                if (localSaved) {
+                    state.userProfile = {
+                        ...serverData,
+                        gold: Math.max(serverData.gold || 0, localSaved.gold || 0),
+                        netCatches: localSaved.netCatches !== undefined ? localSaved.netCatches : (serverData.netCatches || []),
+                        inventoryItems: localSaved.inventoryItems !== undefined ? localSaved.inventoryItems : (serverData.inventoryItems || []),
+                        tankFish: localSaved.tankFish !== undefined ? localSaved.tankFish : (serverData.tankFish || []),
+                        lastDailyClaimTime: localSaved.lastDailyClaimTime || serverData.lastDailyClaimTime,
+                        lastFedAt: localSaved.lastFedAt || serverData.lastFedAt
+                    };
+                } else {
+                    state.userProfile = serverData;
+                }
+
+                saveLocalProfile();
                 renderProfileData();
             } else {
                 renderFallbackProfileData();
@@ -337,45 +381,56 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderFallbackProfileData() {
-        state.userProfile = {
-            id: state.currentUser ? state.currentUser.id : "viewer_demo",
-            username: state.currentUser ? state.currentUser.displayName : "ViewerDemo",
-            gold: 35000,
-            activeRod: "Default Rod",
-            tankCapacity: 3,
-            hasAutoFeeder: false,
-            hasDeepFreezer: true,
-            hasFishingVessel: false,
-            hasFishingNet: true,
-            cooldownTotalSeconds: 900,
-            remainingCooldownSeconds: 320,
-            netCatches: [
-                { id: 1, species: { name: "Rainbow Trout", rarity: "Common", iconUrl: "assets/fish/common_fish/rainbow_trout.png" }, weight: 3.4 },
-                { id: 2, species: { name: "Largemouth Bass", rarity: "Uncommon", iconUrl: "assets/fish/uncommon_fish/largemouth_bass.png" }, weight: 8.2 },
-                { id: 3, species: { name: "Minnow", rarity: "Common", iconUrl: "assets/fish/common_fish/minnow.png" }, weight: 0.2 },
-                { id: 4, species: { name: "Bluegill", rarity: "Common", iconUrl: "assets/fish/common_fish/bluegill.png" }, weight: 1.1 }
-            ],
-            inventoryItems: [
-                { itemName: "Standard Bait", quantity: 4 },
-                { itemName: "Super Bait", quantity: 2 },
-                { itemName: "Common & Uncommon Recovery Med", quantity: 3 }
-            ],
-            tankFish: [
-                { id: 101, nickname: "Goldie", currentHp: 100, maxHp: 100, species: { name: "Golden Carp", rarity: "Legendary" } }
-            ],
-            caughtStats: {
-                "rainbow trout": { timesCaught: 5, heaviestWeight: 4.8 },
-                "largemouth bass": { timesCaught: 2, heaviestWeight: 12.4 },
-                "golden carp": { timesCaught: 1, heaviestWeight: 2450.0 },
-                "minnow": { timesCaught: 8, heaviestWeight: 0.4 },
-                "rusty can": { timesCaught: 3, heaviestWeight: 0.8 }
-            }
-        };
+        const userId = state.currentUser ? state.currentUser.id : "viewer_demo";
+        const saved = loadLocalProfile(userId);
+
+        if (saved) {
+            state.userProfile = saved;
+        } else {
+            state.userProfile = {
+                id: userId,
+                username: state.currentUser ? state.currentUser.displayName : "ViewerDemo",
+                gold: 35000,
+                activeRod: "Default Rod",
+                tankCapacity: 3,
+                hasAutoFeeder: false,
+                hasDeepFreezer: true,
+                hasFishingVessel: false,
+                hasFishingNet: true,
+                cooldownTotalSeconds: 900,
+                remainingCooldownSeconds: 320,
+                netCatches: [
+                    { id: 'cat_1', species: { name: "Rainbow Trout", rarity: "Common", iconUrl: "assets/fish/common_fish/rainbow_trout.png" }, weight: 3.4, qualityMultiplier: 1.0 },
+                    { id: 'cat_2', species: { name: "Largemouth Bass", rarity: "Uncommon", iconUrl: "assets/fish/uncommon_fish/largemouth_bass.png" }, weight: 8.2, qualityMultiplier: 1.15 },
+                    { id: 'cat_3', species: { name: "Minnow", rarity: "Common", iconUrl: "assets/fish/common_fish/minnow.png" }, weight: 0.2, qualityMultiplier: 1.0 },
+                    { id: 'cat_4', species: { name: "Bluegill", rarity: "Common", iconUrl: "assets/fish/common_fish/bluegill.png" }, weight: 1.1, qualityMultiplier: 1.0 }
+                ],
+                inventoryItems: [
+                    { itemName: "Standard Bait", quantity: 4 },
+                    { itemName: "Super Bait", quantity: 2 },
+                    { itemName: "Common & Uncommon Recovery Med", quantity: 3 }
+                ],
+                tankFish: [
+                    { id: 'tank_101', nickname: "Goldie", currentHp: 100, maxHp: 100, species: { name: "Golden Carp", rarity: "Legendary" }, atk: 12, qualityMultiplier: 1.3 }
+                ],
+                caughtStats: {
+                    "rainbow trout": { timesCaught: 5, heaviestWeight: 4.8 },
+                    "largemouth bass": { timesCaught: 2, heaviestWeight: 12.4 },
+                    "golden carp": { timesCaught: 1, heaviestWeight: 2450.0 },
+                    "minnow": { timesCaught: 8, heaviestWeight: 0.4 },
+                    "rusty can": { timesCaught: 3, heaviestWeight: 0.8 }
+                }
+            };
+            saveLocalProfile();
+        }
         renderProfileData();
     }
 
     function renderProfileData() {
         if (!state.userProfile) return;
+
+        // Save local state to localStorage on every render so actions persist
+        saveLocalProfile();
 
         // Header Gold
         const goldEl = document.getElementById('userGoldVal');
