@@ -732,7 +732,10 @@ document.addEventListener('DOMContentLoaded', () => {
             return `
                 <div class="item-card">
                     <span class="item-badge rarity-${item.tierName.toLowerCase()}">${item.tierName.toUpperCase()}</span>
-                    <img src="${item.itemAsset}" class="item-img" alt="${item.specName}" style="object-fit:contain; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5));">
+                    <div style="position: relative; width: 100px; height: 100px; margin: 0 auto 10px auto;">
+                        <img src="${item.frameAsset || 'assets/frames/common_frame.png'}" style="position: absolute; top:0; left:0; width:100%; height:100%; object-fit:contain; z-index:1; pointer-events:none;">
+                        <img src="${item.itemAsset}" class="item-img" alt="${item.specName}" style="position: absolute; top:12%; left:12%; width:76%; height:76%; object-fit:contain; z-index:2; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5));">
+                    </div>
                     <div class="item-name">${item.specName}</div>
                     <div class="item-desc">
                         Weight: <b>${item.weight ? item.weight.toFixed(2) + ' lbs' : '1.00 lbs'}</b><br>
@@ -895,7 +898,8 @@ document.addEventListener('DOMContentLoaded', () => {
             fishHtml = tankFish.map((fish, index) => {
                 const specName = fish.species ? (fish.species.name || fish.speciesName || 'Fish') : (fish.speciesName || 'Fish');
                 const catalogMatch = MASTER_SPECIES_CATALOG.find(c => c.name.toLowerCase() === specName.toLowerCase());
-                const fishAsset = catalogMatch ? catalogMatch.asset : (fish.species && fish.species.iconUrl ? fish.species.iconUrl : 'assets/fish/legendary/golden_carp.png');
+                const fishAsset = catalogMatch ? catalogMatch.asset : (fish.species && fish.species.iconUrl ? fish.species.iconUrl : (fish.species && fish.species.assetPath ? fish.species.assetPath : 'assets/fish/legendary/golden_carp.png'));
+                const frameAsset = catalogMatch ? catalogMatch.frame : (fish.species && fish.species.tier ? `assets/frames/${String(fish.species.tier).toLowerCase()}_frame.png` : 'assets/frames/common_frame.png');
                 const curHp = fish.currentHp !== undefined ? fish.currentHp : (fish.hp !== undefined ? fish.hp : 100);
                 const maxHp = fish.maxHp || 100;
                 const hpPct = Math.min(100, Math.max(0, Math.floor((curHp / maxHp) * 100)));
@@ -914,7 +918,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 return `
                     <div class="swimming-fish-wrapper" style="top: ${topPos}%; left: ${leftPos}%;" title="${specName} (HP: ${curHp}/${maxHp} | ATK: ${atk})">
-                        <img src="${fishAsset}" class="swimming-fish-img" alt="${specName}" style="${isFainted ? 'filter: grayscale(1) drop-shadow(0 6px 12px rgba(0,0,0,0.6)); opacity:0.6;' : 'filter: drop-shadow(0 6px 12px rgba(0,0,0,0.6));'}">
+                        <div style="position: relative; width: 64px; height: 64px; margin: 0 auto;">
+                            <img src="${frameAsset}" style="position: absolute; top:0; left:0; width:100%; height:100%; object-fit:contain; z-index:1; pointer-events:none;">
+                            <img src="${fishAsset}" class="swimming-fish-img" alt="${specName}" style="position: absolute; top:10%; left:10%; width:80%; height:80%; object-fit:contain; z-index:2; ${isFainted ? 'filter: grayscale(1) drop-shadow(0 6px 12px rgba(0,0,0,0.6)); opacity:0.6;' : 'filter: drop-shadow(0 6px 12px rgba(0,0,0,0.6));'}">
+                        </div>
                         <div class="swimming-fish-label">${fish.nickname || specName}${isFainted ? ' 💀' : ''}</div>
                         <div class="swimming-fish-hpbar">
                             <div class="swimming-fish-hpfill" style="width: ${hpPct}%; background: ${hpPct < 30 ? 'linear-gradient(90deg,#f43f5e,#fb7185)' : hpPct < 60 ? 'linear-gradient(90deg,#fb8500,#ffb703)' : 'linear-gradient(90deg,#10b981,#34d399)'}"></div>
@@ -962,14 +969,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Consumables & Recovery Meds
             { name: "Common & Uncommon Med", price: 2500, desc: "Revives fainted Common/Uncommon fish to 50% HP", icon: "assets/Icons/common_uncommon_med.png", category: "Med" },
-            { name: "Rare & Legendary Med", price: 10000, desc: "Revives fainted Rare/Legendary fish to 50% HP", icon: "assets/Icons/rare_legendary_med.png", category: "Med" },
-            { name: "Mythical & Divine Med", price: 25000, desc: "Revives fainted Mythical/Divine fish to 50% HP", icon: "assets/Icons/mythical_divine_med.png", category: "Med" },
-            { name: "Trophy Bait", price: 25000, desc: "Best weight of 3 rolls on next cast", icon: "assets/Icons/trophy_bait.png", category: "Consumable" },
-            { name: "Fish Eggs", price: 15000, desc: "Increases Tank fish stats by +10% next battle", icon: "assets/Icons/fish_eggs.png", category: "Consumable" },
+            { name: "Rare & Legendary Med", price: 5000, desc: "Revives fainted Rare/Legendary fish to 50% HP", icon: "assets/Icons/rare_legendary_med.png", category: "Med" },
+            { name: "Mythical & Divine Med", price: 8000, desc: "Revives fainted Mythical/Divine fish to 50% HP", icon: "assets/Icons/mythical_divine_med.png", category: "Med" },
+            { name: "Trophy Bait", price: 5000, desc: "Best weight of 3 rolls on next cast", icon: "assets/Icons/trophy_bait.png", category: "Consumable" },
+            { name: "Fish Eggs", price: 2000, desc: "Increases Tank fish stats by +10% next battle", icon: "assets/Icons/fish_eggs.png", category: "Consumable" },
 
             // Permanent Account Upgrades
             { name: "Auto-Feeder", price: 25000, desc: "Auto-feeds tank fish every 12 hrs for 3,500 Gold", icon: "assets/Icons/auto_feeder.png", category: "Upgrade" },
-            { name: "Tank Upgrade", price: 225000, desc: "Expands max tank capacity from 3 to 5 fish", icon: "assets/Icons/tank_expansion.png", category: "Upgrade" },
+            { name: "Tank Upgrade", price: 85000, desc: "Expands max tank capacity from 3 to 5 fish", icon: "assets/Icons/tank_expansion.png", category: "Upgrade" },
             { name: "Fishing Net", price: 75000, desc: "20% chance to catch a second fish per cast", icon: "assets/Icons/fishing_net.png", category: "Upgrade" },
             { name: "Deep Freezer", price: 100000, desc: "Keeps all catches 100% fresh for 3 days (72h) before decay", icon: "assets/Icons/deep_freezer.png", category: "Upgrade" },
             { name: "Fishing Vessel", price: 350000, desc: "Enables offshore fishing & double weight rolls", icon: "assets/Icons/fishing_vessel.png", category: "Upgrade" }
@@ -1595,108 +1602,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    window.buyShopItem = async function(itemName, price) {
-        if (!state.userProfile) return;
-
-        if (price > 0 && (state.userProfile.gold || 0) < price) {
-            window.showAppModal({
-                icon: '⚠️',
-                title: 'Insufficient Gold',
-                message: `You need 🪙 ${price.toLocaleString()} Gold to purchase ${itemName}.`
-            });
-            return;
-        }
-
-        if (price > 0) {
-            state.userProfile.gold = (state.userProfile.gold || 0) - price;
-        }
-
-        const nameLower = itemName.toLowerCase();
-
-        if (nameLower.includes('rod')) {
-            state.userProfile.activeRod = itemName;
-        } else if (nameLower.includes('tank upgrade')) {
-            state.userProfile.tankCapacity = 5;
-        } else if (nameLower.includes('auto-feeder')) {
-            state.userProfile.hasAutoFeeder = true;
-        } else if (nameLower.includes('deep freezer')) {
-            state.userProfile.hasDeepFreezer = true;
-        } else if (nameLower.includes('fishing vessel')) {
-            state.userProfile.hasFishingVessel = true;
-        } else if (nameLower.includes('fishing net')) {
-            state.userProfile.hasFishingNet = true;
-        } else {
-            if (!state.userProfile.inventoryItems) state.userProfile.inventoryItems = [];
-            const existing = state.userProfile.inventoryItems.find(i => (i.itemName || i.name || '').toLowerCase() === nameLower);
-            if (existing) existing.quantity++;
-            else state.userProfile.inventoryItems.push({ itemName: itemName, quantity: 1 });
-        }
-
-        try {
-            await fetch(`${window.CONFIG.API_BASE_URL}/api/shop/buy`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: state.userProfile.id, itemName: itemName })
-            });
-        } catch (err) {
-            console.warn('API buy fallback:', err);
-        }
-
-        renderProfileData();
-        window.showAppModal({
-            icon: '🛍️',
-            title: 'Purchase Successful!',
-            message: `Successfully purchased ${itemName} for 🪙 ${price.toLocaleString()} Gold!`
-        });
-    };
-
-    window.craftBait = async function(baitId) {
-        if (!state.userProfile) return;
-
-        const baitName = baitId === 'super' ? 'Super Bait' : baitId === 'power' ? 'Power Bait' : 'Standard Bait';
-        const targetTier = baitId === 'super' ? 'rare' : baitId === 'power' ? 'uncommon' : 'common';
-        const reqCount = baitId === 'super' ? 5 : baitId === 'power' ? 6 : 4;
-
-        // Perform local craft update first
-        if (state.userProfile.netCatches) {
-            let removed = 0;
-            state.userProfile.netCatches = state.userProfile.netCatches.filter(item => {
-                const specName = item.species ? (item.species.name || item.speciesName || '') : '';
-                const catalogMatch = MASTER_SPECIES_CATALOG.find(c => c.name.toLowerCase() === specName.toLowerCase());
-                const tier = catalogMatch ? catalogMatch.tier.toLowerCase() : (item.species && item.species.rarity ? item.species.rarity.toLowerCase() : 'common');
-                const isTrash = catalogMatch ? catalogMatch.isTrash : (item.species && item.species.isTrash);
-                const matchesTier = (targetTier === 'common' && (tier === 'common' || isTrash)) || (tier === targetTier);
-
-                if (matchesTier && removed < reqCount) {
-                    removed++;
-                    return false;
-                }
-                return true;
-            });
-        }
-
-        if (!state.userProfile.inventoryItems) state.userProfile.inventoryItems = [];
-        const existingInv = state.userProfile.inventoryItems.find(i => i.itemName === baitName);
-        if (existingInv) existingInv.quantity++;
-        else state.userProfile.inventoryItems.push({ itemName: baitName, quantity: 1 });
-
-        try {
-            await fetch(`${window.CONFIG.API_BASE_URL}/api/craft/craft-bait`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: state.userProfile.id, baitType: baitId })
-            });
-        } catch (err) {
-            console.warn("API craft fallback:", err);
-        }
-
-        renderProfileData();
-        window.showAppModal({
-            icon: '⚒️',
-            title: 'Bait Crafted!',
-            message: `Successfully crafted x1 ${baitName}! Saved in your Inventory. Auto-equipped on next cast!`
-        });
-    };
 
     window.feedTank = async function() {
         if (!state.userProfile) return;
