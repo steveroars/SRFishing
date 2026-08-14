@@ -114,6 +114,12 @@
                         Fish Encyclopedia
                     </a>
                 </li>
+                <li>
+                    <a class="nav-item" data-tab="help" href="#help">
+                        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg>
+                        How to Play
+                    </a>
+                </li>
             </ul>
         </aside>
 
@@ -238,8 +244,145 @@
                 </div>
             </section>
 
+            <!-- Tab Pane: How to Play -->
+            <section id="tab-help" class="tab-pane">
+                <div class="section-header">
+                    <h2 class="section-title">📖 How to Play — SR Fishing RPG</h2>
+                    <span style="font-size: 0.85rem; color: var(--text-muted);">How to fish, what you can do, and every chat command</span>
+                </div>
+
+                <!-- Overview -->
+                <div style="background: rgba(4,15,30,0.85); border:1px solid rgba(0,229,255,0.25); border-radius:var(--radius-md); padding:18px 22px; margin-bottom:16px;">
+                    <div style="font-weight:800; font-size:1.05rem; color:#fff; margin-bottom:6px;">🎮 What is SR Fishing RPG?</div>
+                    <div style="font-size:0.92rem; color:var(--text-secondary); line-height:1.6;">
+                        SR Fishing RPG is a <b style="color:#fff;">chat-driven fishing game</b> that runs alongside the Twitch stream. Everything happens through chat
+                        commands — you fish, battle, and earn gold while you watch! This web portal lets you view your live profile,
+                        manage your <b style="color:var(--accent-cyan);">Fishing Net</b> and <b style="color:var(--accent-cyan);">Aquarium Tank</b>, buy gear, craft bait,
+                        and check the channel leaderboards in real time.
+                    </div>
+                </div>
+
+                <!-- Getting Started -->
+                <div style="background: rgba(4,15,30,0.85); border:1px solid rgba(0,229,255,0.25); border-radius:var(--radius-md); padding:18px 22px; margin-bottom:16px;">
+                    <div style="font-weight:800; font-size:1.05rem; color:#fff; margin-bottom:10px;">🚀 Getting Started</div>
+                    <ol style="margin:0; padding-left:22px; color:var(--text-secondary); font-size:0.92rem; line-height:1.9;">
+                        <li><b style="color:#fff;">Join the game</b> — type <span class="command-pill">!fish</span> in Twitch chat. This creates your account and immediately casts your first line. You start with <b style="color:var(--accent-gold);">1,000 Gold</b>.</li>
+                        <li><b style="color:#fff;">Connect on the web</b> — click <b style="color:var(--accent-cyan);">Login with Twitch</b> (or <b style="color:var(--accent-cyan);">Set Twitch User</b>) so this portal shows your live profile.</li>
+                        <li><b style="color:#fff;">Claim your daily</b> — type <span class="command-pill">!daily</span> in chat every 24 hours for <b style="color:var(--accent-gold);">1,000 Gold</b>. There's also a <b style="color:var(--accent-gold);">🎁 Claim Daily</b> button in the header.</li>
+                        <li><b style="color:#fff;">Keep fishing</b> — every <span class="command-pill">!fish</span> sends a catch to your <b style="color:var(--accent-cyan);">Fishing Net</b>. Casts have a cooldown (base 15 minutes) that gets shorter with better rods.</li>
+                    </ol>
+                </div>
+
+                <!-- Chat Commands -->
+                <div style="background: rgba(4,15,30,0.85); border:1px solid rgba(0,229,255,0.25); border-radius:var(--radius-md); padding:18px 22px; margin-bottom:16px;">
+                    <div style="font-weight:800; font-size:1.05rem; color:#fff; margin-bottom:10px;">⌨️ Chat Commands</div>
+                    <div style="overflow-x:auto;">
+                        <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+                            <thead>
+                                <tr style="text-align:left; color:var(--accent-cyan); border-bottom:1px solid rgba(0,229,255,0.3);">
+                                    <th style="padding:8px 12px;">Command</th>
+                                    <th style="padding:8px 12px;">What it does</th>
+                                </tr>
+                            </thead>
+                            <tbody style="color:var(--text-secondary);">
+                                <tr style="border-bottom:1px solid rgba(255,255,255,0.06);">
+                                    <td style="padding:8px 12px; white-space:nowrap;"><span class="command-pill">!fish</span></td>
+                                    <td style="padding:8px 12px;">Cast your line. Catches go to your <b style="color:#fff;">Fishing Net</b>. Respects your rod's cooldown.</td>
+                                </tr>
+                                <tr style="border-bottom:1px solid rgba(255,255,255,0.06);">
+                                    <td style="padding:8px 12px; white-space:nowrap;"><span class="command-pill">!daily</span></td>
+                                    <td style="padding:8px 12px;">Claim your <b style="color:var(--accent-gold);">1,000 Gold</b> daily reward. Available once every 24 hours per player.</td>
+                                </tr>
+                                <tr style="border-bottom:1px solid rgba(255,255,255,0.06);">
+                                    <td style="padding:8px 12px; white-space:nowrap;"><span class="command-pill">!fishbattle [gold]</span></td>
+                                    <td style="padding:8px 12px;">Battle a random <b style="color:#fff;">Wild Tank</b> (AI) using your healthy tank fish. Default wager is 100 Gold.</td>
+                                </tr>
+                                <tr style="border-bottom:1px solid rgba(255,255,255,0.06);">
+                                    <td style="padding:8px 12px; white-space:nowrap;"><span class="command-pill">!fishbattle @user [gold]</span></td>
+                                    <td style="padding:8px 12px;">Challenge a viewer to a <b style="color:#fff;">PvP battle</b>. The bot tags them and they must reply <span class="command-pill">!accept</span> or <span class="command-pill">!reject</span> within <b style="color:var(--accent-rose);">60 seconds</b>. Declining (or timing out) cancels the battle and refunds your wager.</td>
+                                </tr>
+                                <tr style="border-bottom:1px solid rgba(255,255,255,0.06);">
+                                    <td style="padding:8px 12px; white-space:nowrap;"><span class="command-pill">!accept</span></td>
+                                    <td style="padding:8px 12px;">Accept a pending PvP challenge sent to you. The battle starts instantly — winner takes the pot.</td>
+                                </tr>
+                                <tr style="border-bottom:1px solid rgba(255,255,255,0.06);">
+                                    <td style="padding:8px 12px; white-space:nowrap;"><span class="command-pill">!reject</span></td>
+                                    <td style="padding:8px 12px;">Decline a pending PvP challenge. The challenger's wagered gold is refunded.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Rarity Tiers -->
+                <div style="background: rgba(4,15,30,0.85); border:1px solid rgba(0,229,255,0.25); border-radius:var(--radius-md); padding:18px 22px; margin-bottom:16px;">
+                    <div style="font-weight:800; font-size:1.05rem; color:#fff; margin-bottom:10px;">🐟 Rarity Tiers</div>
+                    <div style="font-size:0.92rem; color:var(--text-secondary); line-height:1.7;">
+                        Every <span class="command-pill">!fish</span> roll picks a fish (or trash) based on drop chances below. Higher tiers are rarer and worth far more
+                        gold. Catching a <b style="color:var(--accent-cyan);">new species</b> for the first time ever gives a <b style="color:var(--accent-gold);">+20% value bonus</b>!
+                    </div>
+                    <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:12px;">
+                        <span style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); color:#fff; padding:4px 12px; border-radius:12px; font-size:0.8rem; font-weight:700;">Common — 50%</span>
+                        <span style="background:rgba(34,197,94,0.15); border:1px solid rgba(34,197,94,0.4); color:#22c55e; padding:4px 12px; border-radius:12px; font-size:0.8rem; font-weight:700;">Uncommon — 40%</span>
+                        <span style="background:rgba(59,130,246,0.15); border:1px solid rgba(59,130,246,0.4); color:#3b82f6; padding:4px 12px; border-radius:12px; font-size:0.8rem; font-weight:700;">Rare — 6%</span>
+                        <span style="background:rgba(168,85,247,0.15); border:1px solid rgba(168,85,247,0.4); color:#a855f7; padding:4px 12px; border-radius:12px; font-size:0.8rem; font-weight:700;">Legendary — 2.5%</span>
+                        <span style="background:rgba(244,63,94,0.15); border:1px solid rgba(244,63,94,0.4); color:#f43f5e; padding:4px 12px; border-radius:12px; font-size:0.8rem; font-weight:700;">Mythical — 1.3%</span>
+                        <span style="background:rgba(255,183,3,0.15); border:1px solid rgba(255,183,3,0.4); color:var(--accent-gold); padding:4px 12px; border-radius:12px; font-size:0.8rem; font-weight:700;">Divine — 0.2%</span>
+                    </div>
+                </div>
+
+                <!-- Fishing Basics -->
+                <div style="background: rgba(4,15,30,0.85); border:1px solid rgba(0,229,255,0.25); border-radius:var(--radius-md); padding:18px 22px; margin-bottom:16px;">
+                    <div style="font-weight:800; font-size:1.05rem; color:#fff; margin-bottom:10px;">🎣 Fishing Basics</div>
+                    <div style="font-size:0.92rem; color:var(--text-secondary); line-height:1.8;">
+                        <b style="color:#fff;">Rods:</b> Better rods shorten your cast cooldown (Base 15 min → Standard 12 min → Golden 9 min → Divine 6 min). Only one rod is active at a time.<br>
+                        <b style="color:#fff;">Baits:</b> Auto-consume on your next cast. Standard Bait (2× odds above Common), Power Bait (2× above Uncommon), Super Bait (guarantees above Uncommon). Craft or buy them.<br>
+                        <b style="color:#fff;">Net & Decay:</b> Raw catches sit in your <b style="color:var(--accent-cyan);">Fishing Net</b>. Unpreserved fish decay over time (50% value at 24h → 25% at 84h). The <b style="color:#fff;">Deep Freezer</b> upgrade stops decay permanently. Sell, transfer, or craft with catches before they rot!
+                    </div>
+                </div>
+
+                <!-- Tank & Battles -->
+                <div style="background: rgba(4,15,30,0.85); border:1px solid rgba(0,229,255,0.25); border-radius:var(--radius-md); padding:18px 22px; margin-bottom:16px;">
+                    <div style="font-weight:800; font-size:1.05rem; color:#fff; margin-bottom:10px;">🐠 Aquarium Tank & Battles</div>
+                    <div style="font-size:0.92rem; color:var(--text-secondary); line-height:1.8;">
+                        <b style="color:#fff;">Transfer:</b> Move your best fish from the <b style="color:var(--accent-cyan);">Net</b> into your tank (capacity 3, expandable to 5) so they can fight for you.<br>
+                        <b style="color:#fff;">Feed:</b> Fish must be fed every 12 hours (1,000 Gold, or the <b style="color:#fff;">Auto-Feeder</b> upgrade does it for you). Hungry fish lose HP and can faint.<br>
+                        <b style="color:#fff;">Revive:</b> Fainted fish are revived with the right Recovery Med from the shop. Revived fish start at 50% HP and passively heal +10% every 30 minutes.<br>
+                        <b style="color:#fff;">Battles:</b> Battles are only started from <b style="color:var(--accent-rose);">Twitch chat</b> — see the commands above. Results replay here automatically with an animated battle theater, including HP bars and the full combat log.
+                    </div>
+                </div>
+
+                <!-- Shop, Crafting, Log & Ranks -->
+                <div style="background: rgba(4,15,30,0.85); border:1px solid rgba(0,229,255,0.25); border-radius:var(--radius-md); padding:18px 22px; margin-bottom:16px;">
+                    <div style="font-weight:800; font-size:1.05rem; color:#fff; margin-bottom:10px;">🛒 Shop, ⚒️ Crafting, 📖 Log & 🏆 Ranks</div>
+                    <div style="font-size:0.92rem; color:var(--text-secondary); line-height:1.8;">
+                        <b style="color:#fff;">Upgrades Shop:</b> Buy rods, baits, recovery meds (Common/Uncommon 2,500g · Rare/Legendary 5,000g · Mythical/Divine 8,000g), Trophy Bait (5,000g), Fish Eggs (2,000g), and permanent upgrades — Auto-Feeder (25,000g), Tank Upgrade 3→5 slots (85,000g), Fishing Net 20% extra catch (75,000g), Deep Freezer (100,000g), Fishing Vessel (350,000g).<br>
+                        <b style="color:#fff;">Crafting Station:</b> Turn spare net catches into bait — Standard Bait (4 Common fish), Power Bait (6 Uncommon fish), Super Bait (5 Rare fish).<br>
+                        <b style="color:#fff;">Species Log:</b> Track every species you've discovered, with your personal catch counts and heaviest weights.<br>
+                        <b style="color:#fff;">Leaderboards:</b> Compete for Richest, Most Catches, Trophies (channel weight records per species — stealing one pays a 10% gold bonus!), and Battles Won.
+                    </div>
+                </div>
+
+                <!-- Pro Tips -->
+                <div style="background: rgba(255,183,3,0.06); border:1px solid rgba(255,183,3,0.35); border-radius:var(--radius-md); padding:18px 22px; margin-bottom:16px;">
+                    <div style="font-weight:800; font-size:1.05rem; color:var(--accent-gold); margin-bottom:8px;">💡 Pro Tips</div>
+                    <ul style="margin:0; padding-left:22px; color:var(--text-secondary); font-size:0.92rem; line-height:1.9;">
+                        <li>Use <span class="command-pill">!daily</span> every day — it's free gold that compounds your progress.</li>
+                        <li>Keep your tank fed and healthy so you're always ready when someone challenges you.</li>
+                        <li>Don't hoard net catches — decay eats their value. Sell or transfer before it's too late.</li>
+                        <li>New species are worth more — the first catch of a species ever on the channel gets a bonus.</li>
+                        <li>Challenge wagers are held in escrow: if your opponent declines or doesn't answer in 60 seconds, your gold is refunded automatically.</li>
+                    </ul>
+                </div>
+            </section>
         </main>
     </div>
+
+
+
+
+
+
 
     <!-- Footer -->
     <footer class="app-footer">

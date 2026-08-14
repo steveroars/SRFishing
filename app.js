@@ -656,6 +656,9 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'log':
                 renderLogTab();
                 break;
+            case 'help':
+                // How to Play is a static page (see #tab-help in index.html).
+                break;
         }
     }
 
@@ -874,14 +877,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         onclick="window.feedTank()" ${!canFeed ? 'disabled' : ''}>
                         🥣 Feed Tank (1,000 Gold)
                     </button>
-                    <button class="btn-action btn-gold" style="width:auto; padding:10px 20px; font-weight:800;"
-                        onclick="window.startAiBattle()" title="Challenge a random Wild Tank (100 Gold wager)">
-                        ⚔️ Fight AI Battle
-                    </button>
                     <div style="background:rgba(244,63,94,0.12); border:1px solid rgba(244,63,94,0.3); border-radius:var(--radius-md); padding:8px 16px; font-size:0.8rem; font-weight:600; color:#fff; line-height:1.5;">
-                        ⚔️ <b style="color:var(--accent-rose);">Chat Battles:</b><br>
-                        <code style="color:var(--accent-gold); font-size:0.78rem;">!fishbattle [gold]</code> — vs random<br>
-                        <code style="color:var(--accent-gold); font-size:0.78rem;">!fishbattle @user [gold]</code> — challenge (60s to accept)
+                        ⚔️ <b style="color:var(--accent-rose);">Battles run in Twitch Chat:</b><br>
+                        <code style="color:var(--accent-gold); font-size:0.78rem;">!fishbattle [gold]</code> — vs random Wild Tank<br>
+                        <code style="color:var(--accent-gold); font-size:0.78rem;">!fishbattle @user [gold]</code> — challenge a viewer<br>
+                        <code style="color:var(--accent-gold); font-size:0.78rem;">!accept</code> / <code style="color:var(--accent-gold); font-size:0.78rem;">!reject</code> — answer a challenge (60s)
                     </div>
                 </div>
             </div>
