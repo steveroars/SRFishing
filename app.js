@@ -1527,33 +1527,49 @@ document.addEventListener('DOMContentLoaded', () => {
     window.sellFish = async function(fishId, sellPrice, specName) {
         if (!state.userProfile) return;
 
+        let sold = false;
         try {
             const res = await fetch(`${window.CONFIG.API_BASE_URL}/api/net/sell-one`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: state.userProfile.id, catchId: fishId })
+                body: JSON.stringify({ userId: state.userProfile.id, netItemId: fishId })
             });
 
             if (res.ok) {
                 const data = await res.json();
                 if (data.newGold !== undefined) state.userProfile.gold = data.newGold;
+                sold = true;
             } else {
-                state.userProfile.gold = (state.userProfile.gold || 0) + (sellPrice || 0);
+                const errData = await res.json().catch(() => ({}));
+                window.showAppModal({
+                    icon: '⚠️',
+                    title: 'Sale Failed',
+                    message: errData.message || `Could not sell ${specName}. Please try again.`
+                });
+                return;
             }
         } catch (err) {
-            state.userProfile.gold = (state.userProfile.gold || 0) + (sellPrice || 0);
+            console.warn('Sell net fish error:', err);
+            window.showAppModal({
+                icon: '⚠️',
+                title: 'Sale Failed',
+                message: `Could not reach the server to sell ${specName}. Please try again.`
+            });
+            return;
         }
 
-        // Remove item from local state and re-render
-        if (state.userProfile.netCatches) {
-            state.userProfile.netCatches = state.userProfile.netCatches.filter(i => String(i.id) !== String(fishId));
+        if (sold) {
+            // Remove item from local state and re-render
+            if (state.userProfile.netCatches) {
+                state.userProfile.netCatches = state.userProfile.netCatches.filter(i => String(i.id) !== String(fishId));
+            }
+            renderProfileData();
+            window.showAppModal({
+                icon: '💰',
+                title: 'Fish Sold!',
+                message: `Successfully sold ${specName} for 🪙 ${sellPrice.toLocaleString()} Gold!`
+            });
         }
-        renderProfileData();
-        window.showAppModal({
-            icon: '💰',
-            title: 'Fish Sold!',
-            message: `Successfully sold ${specName} for 🪙 ${sellPrice.toLocaleString()} Gold!`
-        });
     };
 
     window.sellAllNetCatches = async function() {
@@ -1647,30 +1663,50 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const netCatches = state.userProfile.netCatches || [];
-        const fish = netCatches.find(c => String(c.id) === String(catchId));
-        if (fish) {
-            state.userProfile.netCatches = netCatches.filter(c => String(c.id) !== String(catchId));
-            if (!state.userProfile.tankFish) state.userProfile.tankFish = [];
-            state.userProfile.tankFish.push(fish);
-        }
-
+        let transferred = false;
         try {
-            await fetch(`${window.CONFIG.API_BASE_URL}/api/tank/transfer`, {
+            const res = await fetch(`${window.CONFIG.API_BASE_URL}/api/net/transfer-to-tank`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: state.userProfile.id, catchId: catchId })
+                body: JSON.stringify({ userId: state.userProfile.id, netItemId: catchId })
             });
+
+            if (res.ok) {
+                transferred = true;
+            } else {
+                const errData = await res.json().catch(() => ({}));
+                window.showAppModal({
+                    icon: '⚠️',
+                    title: 'Transfer Failed',
+                    message: errData.message || `Could not transfer ${specName}. Please try again.`
+                });
+                return;
+            }
         } catch (err) {
-            console.warn('Transfer to tank API fallback:', err);
+            console.warn('Transfer to tank API error:', err);
+            window.showAppModal({
+                icon: '⚠️',
+                title: 'Transfer Failed',
+                message: `Could not reach the server to transfer ${specName}. Please try again.`
+            });
+            return;
         }
 
-        renderProfileData();
-        window.showAppModal({
-            icon: '🐠',
-            title: 'Transferred to Tank',
-            message: `${specName} was transferred into your Aquarium Tank!`
-        });
+        if (transferred) {
+            const netCatches = state.userProfile.netCatches || [];
+            const fish = netCatches.find(c => String(c.id) === String(catchId));
+            state.userProfile.netCatches = netCatches.filter(c => String(c.id) !== String(catchId));
+            if (fish) {
+                if (!state.userProfile.tankFish) state.userProfile.tankFish = [];
+                state.userProfile.tankFish.push(fish);
+            }
+            renderProfileData();
+            window.showAppModal({
+                icon: '🐠',
+                title: 'Transferred to Tank',
+                message: `${specName} was transferred into your Aquarium Tank!`
+            });
+        }
     };
 
     window.sellTankFish = async function(fishId, sellPrice, specName) {
