@@ -732,10 +732,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return `
                 <div class="item-card">
                     <span class="item-badge rarity-${item.tierName.toLowerCase()}">${item.tierName.toUpperCase()}</span>
-                    <div style="position: relative; width: 100px; height: 100px; margin: 0 auto 10px auto;">
-                        <img src="${item.frameAsset || 'assets/frames/common_frame.png'}" style="position: absolute; top:0; left:0; width:100%; height:100%; object-fit:contain; z-index:1; pointer-events:none;">
-                        <img src="${item.itemAsset}" class="item-img" alt="${item.specName}" style="position: absolute; top:12%; left:12%; width:76%; height:76%; object-fit:contain; z-index:2; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5));">
-                    </div>
+                    <img src="${item.itemAsset}" class="item-img" alt="${item.specName}" style="object-fit:contain; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5));">
                     <div class="item-name">${item.specName}</div>
                     <div class="item-desc">
                         Weight: <b>${item.weight ? item.weight.toFixed(2) + ' lbs' : '1.00 lbs'}</b><br>
@@ -899,7 +896,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const specName = fish.species ? (fish.species.name || fish.speciesName || 'Fish') : (fish.speciesName || 'Fish');
                 const catalogMatch = MASTER_SPECIES_CATALOG.find(c => c.name.toLowerCase() === specName.toLowerCase());
                 const fishAsset = catalogMatch ? catalogMatch.asset : (fish.species && fish.species.iconUrl ? fish.species.iconUrl : (fish.species && fish.species.assetPath ? fish.species.assetPath : 'assets/fish/legendary/golden_carp.png'));
-                const frameAsset = catalogMatch ? catalogMatch.frame : (fish.species && fish.species.tier ? `assets/frames/${String(fish.species.tier).toLowerCase()}_frame.png` : 'assets/frames/common_frame.png');
                 const curHp = fish.currentHp !== undefined ? fish.currentHp : (fish.hp !== undefined ? fish.hp : 100);
                 const maxHp = fish.maxHp || 100;
                 const hpPct = Math.min(100, Math.max(0, Math.floor((curHp / maxHp) * 100)));
@@ -918,10 +914,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 return `
                     <div class="swimming-fish-wrapper" style="top: ${topPos}%; left: ${leftPos}%;" title="${specName} (HP: ${curHp}/${maxHp} | ATK: ${atk})">
-                        <div style="position: relative; width: 64px; height: 64px; margin: 0 auto;">
-                            <img src="${frameAsset}" style="position: absolute; top:0; left:0; width:100%; height:100%; object-fit:contain; z-index:1; pointer-events:none;">
-                            <img src="${fishAsset}" class="swimming-fish-img" alt="${specName}" style="position: absolute; top:10%; left:10%; width:80%; height:80%; object-fit:contain; z-index:2; ${isFainted ? 'filter: grayscale(1) drop-shadow(0 6px 12px rgba(0,0,0,0.6)); opacity:0.6;' : 'filter: drop-shadow(0 6px 12px rgba(0,0,0,0.6));'}">
-                        </div>
+                        <img src="${fishAsset}" class="swimming-fish-img" alt="${specName}" style="${isFainted ? 'filter: grayscale(1) drop-shadow(0 6px 12px rgba(0,0,0,0.6)); opacity:0.6;' : 'filter: drop-shadow(0 6px 12px rgba(0,0,0,0.6));'}">
                         <div class="swimming-fish-label">${fish.nickname || specName}${isFainted ? ' 💀' : ''}</div>
                         <div class="swimming-fish-hpbar">
                             <div class="swimming-fish-hpfill" style="width: ${hpPct}%; background: ${hpPct < 30 ? 'linear-gradient(90deg,#f43f5e,#fb7185)' : hpPct < 60 ? 'linear-gradient(90deg,#fb8500,#ffb703)' : 'linear-gradient(90deg,#10b981,#34d399)'}"></div>
@@ -1690,29 +1683,45 @@ document.addEventListener('DOMContentLoaded', () => {
             confirmText: 'Sell Fish',
             cancelText: 'Cancel',
             onConfirm: async () => {
+                let sold = false;
                 try {
                     const res = await fetch(`${window.CONFIG.API_BASE_URL}/api/tank/sell`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ userId: state.userProfile.id, fishId: fishId })
+                        body: JSON.stringify({ userId: state.userProfile.id, tankFishId: fishId })
                     });
                     if (res.ok) {
                         const data = await res.json();
                         if (data.newGold !== undefined) state.userProfile.gold = data.newGold;
+                        sold = true;
                     } else {
-                        state.userProfile.gold = (state.userProfile.gold || 0) + sellPrice;
+                        const errData = await res.json().catch(() => ({}));
+                        window.showAppModal({
+                            icon: '⚠️',
+                            title: 'Sale Failed',
+                            message: errData.message || `Could not sell ${specName}. Please try again.`
+                        });
+                        return;
                     }
                 } catch (err) {
-                    state.userProfile.gold = (state.userProfile.gold || 0) + sellPrice;
+                    console.warn('Sell tank fish error:', err);
+                    window.showAppModal({
+                        icon: '⚠️',
+                        title: 'Sale Failed',
+                        message: `Could not reach the server to sell ${specName}. Please try again.`
+                    });
+                    return;
                 }
 
-                state.userProfile.tankFish = (state.userProfile.tankFish || []).filter(f => String(f.id) !== String(fishId));
-                renderProfileData();
-                window.showAppModal({
-                    icon: '🪙',
-                    title: 'Fish Sold',
-                    message: `Sold ${specName} for 🪙 ${sellPrice.toLocaleString()} Gold!`
-                });
+                if (sold) {
+                    state.userProfile.tankFish = (state.userProfile.tankFish || []).filter(f => String(f.id) !== String(fishId));
+                    renderProfileData();
+                    window.showAppModal({
+                        icon: '🪙',
+                        title: 'Fish Sold',
+                        message: `Sold ${specName} for 🪙 ${sellPrice.toLocaleString()} Gold!`
+                    });
+                }
             }
         });
     };
