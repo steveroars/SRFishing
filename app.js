@@ -291,6 +291,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    window.promptSetUsername = function() {
+        const current = (state.currentUser && state.currentUser.username) || "steveroars";
+        const input = prompt("Enter your Twitch Username to sync with Twitch Chat:", current);
+        if (input && input.trim()) {
+            const clean = input.trim().toLowerCase();
+            localStorage.setItem('sr_custom_username', clean);
+            state.currentUser = { id: clean, displayName: input.trim(), username: clean };
+            localStorage.setItem('sr_user_session', JSON.stringify(state.currentUser));
+            updateUserHeaderUI();
+            fetchUserProfile();
+        }
+    };
+
     function loginWithTwitch() {
         if (!window.CONFIG.TWITCH_CLIENT_ID || window.CONFIG.TWITCH_CLIENT_ID === "YOUR_TWITCH_CLIENT_ID") {
             alert("Twitch Client ID is not configured yet! Please update config.js with your Twitch Dev Client ID.");
@@ -352,7 +365,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. Fetch Profile from JRMA Backend API (With Persistent Local State Merging)
     async function fetchUserProfile(isSilent = false) {
         if (!state.currentUser) {
-            state.currentUser = { id: "viewer_demo", displayName: "ViewerDemo", username: "viewerdemo" };
+            const savedName = localStorage.getItem('sr_custom_username') || "steveroars";
+            state.currentUser = { id: savedName.toLowerCase(), displayName: savedName, username: savedName.toLowerCase() };
         }
 
         const userId = state.currentUser.id;
