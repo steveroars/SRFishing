@@ -971,6 +971,109 @@ document.addEventListener('DOMContentLoaded', () => {
         `).join('');
     }
 
+    window.buyShopItem = async function(itemName, price) {
+        if (!state.userProfile) return;
+
+        if (state.userProfile.gold < price && price > 0) {
+            window.showAppModal({
+                icon: '⚠️',
+                title: 'Insufficient Gold',
+                message: `You need ${price.toLocaleString()} Gold to purchase ${itemName}.`
+            });
+            return;
+        }
+
+        // Rod Purchases (Default = 0, Standard = 1, Golden = 2, Divine = 3)
+        if (itemName.includes('Rod')) {
+            let rodEnum = 0;
+            if (itemName.includes('Standard')) rodEnum = 1;
+            else if (itemName.includes('Golden')) rodEnum = 2;
+            else if (itemName.includes('Divine')) rodEnum = 3;
+
+            try {
+                const res = await fetch(`${window.CONFIG.API_BASE_URL}/api/Shop/buy-rod`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: state.userProfile.id, targetRod: rodEnum })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    window.showAppModal({ icon: '🎣', title: 'Rod Purchased!', message: data.message });
+                    await fetchUserProfile();
+                } else {
+                    const err = await res.text();
+                    window.showAppModal({ icon: '❌', title: 'Purchase Failed', message: err });
+                }
+            } catch (e) {
+                window.showAppModal({ icon: '❌', title: 'Error', message: 'Failed to connect to shop service.' });
+            }
+            return;
+        }
+
+        // Baits / Meds / Consumables
+        let itemEnum = null;
+        if (itemName === 'Standard Bait') itemEnum = 0;
+        else if (itemName === 'Power Bait') itemEnum = 1;
+        else if (itemName === 'Super Bait') itemEnum = 2;
+        else if (itemName === 'Trophy Bait') itemEnum = 3;
+        else if (itemName === 'Common & Uncommon Med') itemEnum = 4;
+        else if (itemName === 'Rare & Legendary Med') itemEnum = 5;
+        else if (itemName === 'Mythical & Divine Med') itemEnum = 6;
+        else if (itemName === 'Fish Eggs') itemEnum = 7;
+
+        if (itemEnum !== null) {
+            try {
+                const res = await fetch(`${window.CONFIG.API_BASE_URL}/api/Shop/buy-item`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: state.userProfile.id, itemType: itemEnum, quantity: 1 })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    window.showAppModal({ icon: '🛒', title: 'Item Purchased!', message: data.message });
+                    await fetchUserProfile();
+                } else {
+                    const err = await res.text();
+                    window.showAppModal({ icon: '❌', title: 'Purchase Failed', message: err });
+                }
+            } catch (e) {
+                window.showAppModal({ icon: '❌', title: 'Error', message: 'Failed to connect to shop service.' });
+            }
+            return;
+        }
+
+        // Upgrades
+        let upgradeKey = null;
+        if (itemName === 'Auto-Feeder') upgradeKey = 'autofeeder';
+        else if (itemName === 'Tank Upgrade') upgradeKey = 'tankexpansion';
+        else if (itemName === 'Fishing Net') upgradeKey = 'fishingnet';
+        else if (itemName === 'Deep Freezer') upgradeKey = 'deepfreezer';
+        else if (itemName === 'Fishing Vessel') upgradeKey = 'fishingvessel';
+
+        if (upgradeKey) {
+            try {
+                const res = await fetch(`${window.CONFIG.API_BASE_URL}/api/Shop/buy-upgrade`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: state.userProfile.id, upgradeName: upgradeKey })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    window.showAppModal({ icon: '⭐', title: 'Upgrade Unlocked!', message: data.message });
+                    await fetchUserProfile();
+                } else {
+                    const err = await res.text();
+                    window.showAppModal({ icon: '❌', title: 'Purchase Failed', message: err });
+                }
+            } catch (e) {
+                window.showAppModal({ icon: '❌', title: 'Error', message: 'Failed to connect to shop service.' });
+            }
+        }
+    };
+
     // 6. Crafting Station (With Accurate Ingredient Progress Bars & Active/Disabled "Craft" Button)
     function renderCraftTab() {
         const craftGrid = document.getElementById('craftGrid');
