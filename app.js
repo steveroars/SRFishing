@@ -422,12 +422,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function syncCooldownTime(remainingSeconds) {
         if (typeof remainingSeconds === 'number' && remainingSeconds > 0) {
-            const targetEnd = Date.now() + (remainingSeconds * 1000);
-            if (!state.cooldownEndTime || Math.abs(state.cooldownEndTime - targetEnd) > 2000) {
-                state.cooldownEndTime = targetEnd;
+            const currentRemaining = getRemainingCooldownSecs();
+            // Only update target end time if timer is uninitialized OR server reports a new cast (>5s increase)
+            if (currentRemaining === 0 || remainingSeconds > (currentRemaining + 5)) {
+                state.cooldownEndTime = Date.now() + (remainingSeconds * 1000);
             }
         } else if (remainingSeconds === 0) {
-            state.cooldownEndTime = 0;
+            if (getRemainingCooldownSecs() <= 3) {
+                state.cooldownEndTime = 0;
+            }
         }
     }
 
