@@ -975,17 +975,34 @@ document.addEventListener('DOMContentLoaded', () => {
             { name: "Fishing Vessel", price: 350000, desc: "Enables offshore fishing & double weight rolls", icon: "assets/Icons/fishing_vessel.png", category: "Upgrade" }
         ];
 
-        shopGrid.innerHTML = shopItems.map(item => `
-            <div class="item-card">
-                <span class="item-badge rarity-common">${item.category}</span>
-                <img src="${item.icon}" class="item-img" alt="${item.name}">
-                <div class="item-name">${item.name}</div>
-                <div class="item-desc">${item.desc}</div>
-                <button class="btn-action btn-gold" onclick="window.buyShopItem('${item.name.replace(/'/g, "\\'")}', ${item.price})">
-                    ${item.price === 0 ? 'Free Starting Rod' : 'Buy for 🪙 ' + item.price.toLocaleString() + ' Gold'}
-                </button>
-            </div>
-        `).join('');
+        const activeRodStr = (state.userProfile && state.userProfile.activeRod) ? String(state.userProfile.activeRod).toLowerCase() : 'default';
+
+        shopGrid.innerHTML = shopItems.map(item => {
+            const isRodEquipped = item.category === "Rod" && (
+                (item.name === "Default Rod" && (activeRodStr.includes('default') || activeRodStr === '0')) ||
+                (item.name === "Standard Rod" && (activeRodStr.includes('standard') || activeRodStr === '1')) ||
+                (item.name === "Golden Rod" && (activeRodStr.includes('golden') || activeRodStr === '2')) ||
+                (item.name === "Divine Rod" && (activeRodStr.includes('divine') || activeRodStr === '3'))
+            );
+
+            return `
+                <div class="item-card">
+                    <span class="item-badge rarity-common">${item.category}</span>
+                    <img src="${item.icon}" class="item-img" alt="${item.name}">
+                    <div class="item-name">${item.name}</div>
+                    <div class="item-desc">${item.desc}</div>
+                    ${isRodEquipped ? `
+                        <button class="btn-action" disabled style="opacity: 0.6; cursor: default; background: var(--bg-tertiary); border: 1px solid var(--accent-emerald); color: var(--accent-emerald);">
+                            ✓ Equipped
+                        </button>
+                    ` : `
+                        <button class="btn-action btn-gold" onclick="window.buyShopItem('${item.name.replace(/'/g, "\\'")}', ${item.price})">
+                            ${item.price === 0 ? 'Free Starting Rod' : 'Buy for 🪙 ' + item.price.toLocaleString() + ' Gold'}
+                        </button>
+                    `}
+                </div>
+            `;
+        }).join('');
     }
 
     window.buyShopItem = async function(itemName, price) {
@@ -1353,9 +1370,25 @@ document.addEventListener('DOMContentLoaded', () => {
         const discoveredMap = new Map();
 
         if (state.userProfile) {
+            if (state.userProfile.collectionLogs && Array.isArray(state.userProfile.collectionLogs)) {
+                state.userProfile.collectionLogs.forEach(cl => {
+                    const sName = cl.speciesName || cl.name;
+                    if (sName) {
+                        const key = sName.toLowerCase();
+                        discoveredMap.set(key, {
+                            timesCaught: cl.timesCaught || 1,
+                            heaviestWeight: cl.heaviestWeight || 1.0
+                        });
+                    }
+                });
+            }
+
             if (state.userProfile.caughtStats) {
                 Object.entries(state.userProfile.caughtStats).forEach(([k, v]) => {
-                    discoveredMap.set(k.toLowerCase(), v);
+                    const key = k.toLowerCase();
+                    if (!discoveredMap.has(key)) {
+                        discoveredMap.set(key, v);
+                    }
                 });
             }
 
@@ -1379,10 +1412,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     const n = f.species ? (f.species.name || f.speciesName) : f.speciesName;
                     checkAdd(n, f.weight);
                 });
-            }
-
-            if (state.userProfile.caughtSpecies && Array.isArray(state.userProfile.caughtSpecies)) {
-                state.userProfile.caughtSpecies.forEach(s => checkAdd(String(s)));
             }
         }
 
