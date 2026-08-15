@@ -796,6 +796,53 @@ document.addEventListener('DOMContentLoaded', () => {
         return ITEM_TYPE_META[typeKey] || null;
     }
 
+    // Fish rarity tier → required Recovery Med item type (mirrors backend TankController.ReviveFish).
+    const TIER_TO_MED_TYPE = {
+        trash: 5, common: 5, uncommon: 5,
+        rare: 6, legendary: 6,
+        mythical: 7, divine: 7
+    };
+
+    function resolveFishTierKey(fish, catalogMatch) {
+        let tierRaw = null;
+        if (fish && fish.species) {
+            if (fish.species.tier !== undefined && fish.species.tier !== null) tierRaw = fish.species.tier;
+            else if (fish.species.rarity) tierRaw = fish.species.rarity;
+        }
+        if (tierRaw === null || tierRaw === undefined) {
+            if (catalogMatch) tierRaw = catalogMatch.tier;
+        }
+        if (typeof tierRaw === 'number') {
+            return ['trash', 'common', 'uncommon', 'rare', 'legendary', 'mythical', 'divine'][tierRaw] || 'common';
+        }
+        return String(tierRaw || 'common').toLowerCase();
+    }
+
+    function getRequiredMedType(tierKey) {
+        return TIER_TO_MED_TYPE[tierKey] || 5;
+    }
+
+    function parseServerDate(value) {
+        if (!value) return NaN;
+        let str = String(value).trim();
+        // Backend stores UTC; add a Z suffix when the timestamp has no timezone indicator.
+        if (!/[zZ]$|[+-]\d{2}:?\d{2}$/.test(str)) {
+            str += 'Z';
+        }
+        return Date.parse(str);
+    }
+
+    function formatFaintCountdown(faintedAt) {
+        const ts = parseServerDate(faintedAt);
+        if (isNaN(ts)) return '--';
+        const remainingMs = ts + (5 * 60 * 60 * 1000) - Date.now();
+        if (remainingMs <= 0) return 'expired';
+        const hrs = Math.floor(remainingMs / 3600000);
+        const mins = Math.floor((remainingMs % 3600000) / 60000);
+        const secs = Math.floor((remainingMs % 60000) / 1000);
+        return `${hrs}h ${mins}m ${secs}s`;
+    }
+
     function renderInventoryTab() {
         const invGrid = document.getElementById('invGrid');
         if (!invGrid) return;
@@ -898,6 +945,10 @@ document.addEventListener('DOMContentLoaded', () => {
             return (cur / max) < 0.5;
         });
         const canFeed = isFeedDue || hasLowHpFish;
+        const hasFaintedFish = tankFish.some(fish => {
+            const cur = fish.currentHp !== undefined ? fish.currentHp : (fish.hp !== undefined ? fish.hp : 100);
+            return fish.isFainted === true || cur <= 0;
+        });
 
         // Tank Header Info (Rendered OUTSIDE/ABOVE tankVisualizer into tankInfoPanel)
         const tankHeaderHtml = `
@@ -908,9 +959,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span style="color: var(--accent-cyan); font-weight: 800;">${tankFish.length} / ${capacity} Slots</span>
                         ${hasAutoFeeder ? '<span style="font-size:0.75rem; background:rgba(0,229,255,0.15); color:var(--accent-cyan); border:1px solid rgba(0,229,255,0.3); padding:2px 8px; border-radius:12px;">🤖 Auto-Feeder</span>' : ''}
                         ${hasLowHpFish ? '<span style="font-size:0.75rem; background:rgba(244,63,94,0.15); color:var(--accent-rose); border:1px solid rgba(244,63,94,0.3); padding:2px 8px; border-radius:12px;">⚠️ Fish HP Low!</span>' : ''}
+                        ${hasFaintedFish ? '<span style="font-size:0.75rem; background:rgba(244,63,94,0.25); color:var(--accent-rose); border:1px solid rgba(244,63,94,0.6); padding:2px 8px; border-radius:12px;">💀 Fainted Fish! Revive within 5h</span>' : ''}
+
                     </div>
                     <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 3px;">
-                        Feed cycle: 12h &nbsp;|&nbsp; Regen: +10% HP/30m while fed &nbsp;|&nbsp; Alive fish sell at 100%, fainted at 50%
+                        Feed cycle: 12h &nbsp;|&nbsp; Regen: +10% HP/30m while fed &nbsp;|&nbsp; Alive fish sell at 100%, fainted at 50% &nbsp;|&nbsp; Fainted fish removed after 5h
                     </div>
                 </div>
                 <div style="display: flex; gap: 12px; align-items: center; flex-wrap:wrap;">
@@ -952,10 +1005,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const qualityMult = fish.qualityMultiplier || 1.0;
                 const qualityLabel = qualityMult >= 1.3 ? '⭐ Perfect' : qualityMult >= 1.15 ? '✨ Good' : 'Standard';
                 const qualityColor = qualityMult >= 1.3 ? 'var(--accent-gold)' : qualityMult >= 1.15 ? 'var(--accent-cyan)' : 'var(--text-muted)';
-                const isFainted = curHp <= 0;
+                const isFainted = fish.isFainted === true || curHp <= 0;
                 const basePrice = catalogMatch ? catalogMatch.basePrice : 10;
                 const aliveSell = Math.max(1, Math.floor(basePrice * qualityMult));
                 const sellVal = isFainted ? Math.floor(aliveSell * 0.5) : aliveSell;
+                const tierKey = resolveFishTierKey(fish, catalogMatch);
+                const medType = getRequiredMedType(tierKey);
+                const medMeta = getItemTypeMeta(medType);
+                const hasMed = (state.userProfile.inventoryItems || []).some(it => resolveItemTypeKey(it) === medType && Number(it.quantity || 0) > 0);
 
                 // Horizontal lineup: evenly spread fish across the tank so all stats & sell buttons stay in frame
                 const fishCount = tankFish.length;
@@ -973,6 +1030,18 @@ document.addEventListener('DOMContentLoaded', () => {
                             ❤️ ${curHp}/${maxHp} &nbsp;⚔️ ${atk} ATK<br>
                             <span style="color:${qualityColor}; font-weight:700;">${qualityLabel} (${qualityMult.toFixed(2)}x)</span>
                         </div>
+                        ${isFainted ? `
+                        <div style="margin-top:5px; display:flex; flex-direction:column; gap:4px; align-items:center; width:100%;">
+                            <span style="font-size:0.66rem; font-weight:700; color:var(--accent-rose); text-align:center; line-height:1.35;">
+                                💀 Fainted — removed in ${formatFaintCountdown(fish.faintedAt)}
+                            </span>
+                            <button class="btn-action" onclick="window.reviveFish('${fish.id}', '${specName.replace(/'/g, "\\'")}', ${medType})"
+                                style="width:100%; padding:4px 12px; font-size:0.72rem; font-weight:800; border-radius:6px; cursor:pointer; background:linear-gradient(90deg,#f43f5e,#fb7185); color:#fff; border:none; ${hasMed ? '' : 'opacity:0.55;'}">
+                                💊 Revive ${medMeta ? medMeta.name : 'Recovery Med'}
+                            </button>
+                            ${hasMed ? '' : `<span style="font-size:0.62rem; color:var(--text-muted); text-align:center;">Not owned — buy it in the Shop</span>`}
+                        </div>
+                        ` : ''}
                         <button class="btn-action btn-gold" onclick="window.sellTankFish('${fish.id}', ${sellVal}, '${specName.replace(/'/g, "\\'")}')"
                             style="margin-top:5px; padding:4px 12px; font-size:0.75rem; font-weight:800; border-radius:6px; cursor:pointer;">
                             Sell 🪙 ${sellVal.toLocaleString()}${isFainted ? ' (50%)' : ''}
@@ -2086,6 +2155,73 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     };
+    window.reviveFish = async function(fishId, specName, medType) {
+        if (!state.userProfile) return;
+
+        const medMeta = getItemTypeMeta(medType);
+        const medName = medMeta ? medMeta.name : 'Recovery Med';
+        const hasMed = (state.userProfile.inventoryItems || []).some(it => resolveItemTypeKey(it) === medType && Number(it.quantity || 0) > 0);
+
+        if (!hasMed) {
+            window.showAppModal({
+                icon: '💊',
+                title: 'Med Kit Required',
+                message: `You need a <b>${medName}</b> to revive <b>${specName}</b>. Purchase one from the <b>Shop</b> tab, then try again!`,
+                confirmText: 'Go to Shop',
+                onConfirm: () => switchTab('shop')
+            });
+            return;
+        }
+
+        try {
+            const res = await fetch(`${window.CONFIG.API_BASE_URL}/api/tank/revive`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: state.userProfile.id, tankFishId: fishId })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+
+                // Optimistic local update so the tank UI reflects the revive immediately.
+                const fish = (state.userProfile.tankFish || []).find(f => String(f.id) === String(fishId));
+                if (fish) {
+                    fish.isFainted = false;
+                    fish.hp = Math.max(1, Math.floor((fish.maxHp || 100) / 2));
+                    fish.faintedAt = null;
+                    fish.healingStartedAt = new Date().toISOString();
+                }
+                const med = (state.userProfile.inventoryItems || []).find(it => resolveItemTypeKey(it) === medType);
+                if (med) {
+                    med.quantity = Math.max(0, (Number(med.quantity) || 0) - 1);
+                }
+                renderProfileData();
+                fetchUserProfile(true); // re-sync with server in the background
+
+                window.showAppModal({
+                    icon: '💊',
+                    title: 'Fish Revived!',
+                    message: data.message || `${specName} was revived to 50% HP using ${medName}!`
+                });
+            } else {
+                const errData = await res.json().catch(() => ({}));
+                window.showAppModal({
+                    icon: '⚠️',
+                    title: 'Revive Failed',
+                    message: errData.message || `Could not revive ${specName}. Please try again.`
+                });
+            }
+        } catch (err) {
+            console.warn('Revive fish API error:', err);
+            window.showAppModal({
+                icon: '⚠️',
+                title: 'Revive Failed',
+                message: `Could not reach the server to revive ${specName}. Please try again.`
+            });
+        }
+    };
+
+
 
     window.launchFishBattle = function() {
         const tankFish = (state.userProfile && state.userProfile.tankFish) ? state.userProfile.tankFish : [];
