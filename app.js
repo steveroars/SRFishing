@@ -763,6 +763,39 @@ document.addEventListener('DOMContentLoaded', () => {
         netGrid.innerHTML = netHeaderHtml + decayNoticeHtml + cardsHtml;
     }
 
+    // ItemType enum → display name + icon (mirrors backend ItemType enum 1-8).
+    const ITEM_TYPE_META = {
+        1: { name: "Standard Bait", icon: "assets/baits/standard_bait.png" },
+        2: { name: "Power Bait", icon: "assets/baits/power_bait.png" },
+        3: { name: "Super Bait", icon: "assets/baits/super_bait.png" },
+        4: { name: "Trophy Bait", icon: "assets/Icons/trophy_bait.png" },
+        5: { name: "Common & Uncommon Recovery Med", icon: "assets/Icons/common_uncommon_med.png" },
+        6: { name: "Rare & Legendary Recovery Med", icon: "assets/Icons/rare_legendary_med.png" },
+        7: { name: "Mythical & Divine Recovery Med", icon: "assets/Icons/mythical_divine_med.png" },
+        8: { name: "Fish Eggs", icon: "assets/Icons/fish_eggs.png" }
+    };
+
+    // In case the backend ever serializes ItemType as its enum name string ("PowerBait", "RecoveryMed_Common", ...).
+    const ITEM_TYPE_NAME_TO_INT = {
+        standardbait: 1, powerbait: 2, superbait: 3, trophybait: 4,
+        recoverymed_common: 5, recoverymed_rare: 6, recoverymed_mythical: 7, fisheggs: 8
+    };
+
+    function resolveItemTypeKey(item) {
+        if (item && item.itemType !== undefined && item.itemType !== null) {
+            if (typeof item.itemType === 'number') return item.itemType;
+            const asInt = parseInt(item.itemType, 10);
+            if (!isNaN(asInt)) return asInt;
+            const norm = String(item.itemType).toLowerCase().replace(/[_\s]/g, '');
+            if (ITEM_TYPE_NAME_TO_INT[norm]) return ITEM_TYPE_NAME_TO_INT[norm];
+        }
+        return null;
+    }
+
+    function getItemTypeMeta(typeKey) {
+        return ITEM_TYPE_META[typeKey] || null;
+    }
+
     function renderInventoryTab() {
         const invGrid = document.getElementById('invGrid');
         if (!invGrid) return;
@@ -774,15 +807,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         invGrid.innerHTML = items.map(item => {
-            const name = item.itemName || item.name || 'Item';
-            let icon = 'assets/baits/standard_bait.png';
-            if (name.toLowerCase().includes('power')) icon = 'assets/baits/power_bait.png';
-            else if (name.toLowerCase().includes('super')) icon = 'assets/baits/super_bait.png';
-            else if (name.toLowerCase().includes('trophy')) icon = 'assets/Icons/trophy_bait.png';
-            else if (name.toLowerCase().includes('common')) icon = 'assets/Icons/common_uncommon_med.png';
-            else if (name.toLowerCase().includes('rare')) icon = 'assets/Icons/rare_legendary_med.png';
-            else if (name.toLowerCase().includes('mythical')) icon = 'assets/Icons/mythical_divine_med.png';
-            else if (name.toLowerCase().includes('egg')) icon = 'assets/Icons/fish_eggs.png';
+            // Server inventory rows come back as { itemType: <enum number>, quantity } (no itemName),
+            // so resolve the display name + icon from the ItemType enum first; fall back to
+            // name-based resolution for local/demo data shaped like { itemName, quantity }.
+            const typeKey = resolveItemTypeKey(item);
+            const meta = typeKey ? getItemTypeMeta(typeKey) : null;
+
+            let name = meta ? meta.name : (item.itemName || item.name || 'Item');
+            let icon = meta ? meta.icon : 'assets/baits/standard_bait.png';
+
+            if (!meta) {
+                if (name.toLowerCase().includes('power')) icon = 'assets/baits/power_bait.png';
+                else if (name.toLowerCase().includes('super')) icon = 'assets/baits/super_bait.png';
+                else if (name.toLowerCase().includes('trophy')) icon = 'assets/Icons/trophy_bait.png';
+                else if (name.toLowerCase().includes('common')) icon = 'assets/Icons/common_uncommon_med.png';
+                else if (name.toLowerCase().includes('rare')) icon = 'assets/Icons/rare_legendary_med.png';
+                else if (name.toLowerCase().includes('mythical')) icon = 'assets/Icons/mythical_divine_med.png';
+                else if (name.toLowerCase().includes('egg')) icon = 'assets/Icons/fish_eggs.png';
+            }
 
             return `
                 <div class="item-card">
@@ -1002,13 +1044,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     <img src="${item.icon}" class="item-img" alt="${item.name}">
                     <div class="item-name">${item.name}</div>
                     <div class="item-desc">${item.desc}</div>
-                    ${isRodEquipped ? `
+                    ${item.name === "Default Rod" ? `
+                        <button class="btn-action" disabled style="opacity: 0.6; cursor: default; background: var(--bg-tertiary); border: 1px solid var(--accent-emerald); color: var(--accent-emerald);">
+                            ✓ Starter Rod (Owned)
+                        </button>
+                    ` : isRodEquipped ? `
                         <button class="btn-action" disabled style="opacity: 0.6; cursor: default; background: var(--bg-tertiary); border: 1px solid var(--accent-emerald); color: var(--accent-emerald);">
                             ✓ Equipped
                         </button>
                     ` : `
                         <button class="btn-action btn-gold" onclick="window.buyShopItem('${item.name.replace(/'/g, "\\'")}', ${item.price})">
-                            ${item.price === 0 ? 'Free Starting Rod' : 'Buy for 🪙 ' + item.price.toLocaleString() + ' Gold'}
+                            Buy for 🪙 ${item.price.toLocaleString()} Gold
                         </button>
                     `}
                 </div>
