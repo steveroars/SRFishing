@@ -2030,8 +2030,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div style="flex:1; min-width: 220px;">
                         <div style="font-weight:800; font-size:1.25rem; color:#fff;">${(profile.username || 'Viewer').replace(/</g, '&lt;')}'s Fishing Hut</div>
                         <div style="font-size:0.85rem; color:var(--text-secondary); margin-top:4px;">
-                            🧊 Cold Storage: <b>Lv${h.cookedStorageLevel}</b> (${h.cookedStorageHours}h shelf life)
-                            &nbsp;·&nbsp; 📦 Raw Storage: <b>${h.rawStorageCount}/${h.rawStorageCapacity || 0}</b>
+                            🧊 Cold Storage: <b>Lv${h.cookedStorageLevel}</b> (${h.cookedStorageHours}h shelf life) · <span style="color:var(--accent-cyan); font-weight:700;">${(h.cookedItems || []).filter(i => !i.expired).length} dish(es) stored</span>
+                            &nbsp;·&nbsp; 📦 Raw Storage: <b>${h.rawStorageCount}/${h.rawStorageCapacity || 0}</b> fish
                         </div>
                     </div>
                     <div style="display:flex; flex-direction:column; gap:6px; align-items:flex-end;">
@@ -2083,9 +2083,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 rawEl.innerHTML = `<div class="hut-section"><h3>📦 Raw Fish Storage</h3><p style="color:var(--text-muted);">Unlock the <b>Raw Fish Storage</b> upgrade above to keep a 10-fish reserve. Recipes and bounties pull from your Net first, then this storage.</p></div>`;
             } else {
                 const fishes = h.rawStorage || [];
+                const rawTotal = fishes.reduce((s, f) => s + (f.value || 0), 0);
                 rawEl.innerHTML = `
                     <div class="hut-section">
-                        <h3>📦 Raw Fish Storage <span style="font-size:0.8rem; color:var(--text-muted);">(${fishes.length}/${h.rawStorageCapacity})</span></h3>
+                        <div style="display:flex; flex-wrap:wrap; align-items:center; gap:10px;">
+                            <h3 style="flex:1;">📦 Raw Fish Storage <span style="font-size:0.8rem; color:var(--text-muted);">(${fishes.length}/${h.rawStorageCapacity})</span></h3>
+                            ${fishes.length > 0 ? `<span style="font-size:0.8rem; color:var(--accent-gold); font-weight:700;">🪙 ${rawTotal.toLocaleString()} total</span>` : ''}
+                        </div>
                         ${fishes.length === 0 ? '<p style="color:var(--text-muted); font-size:0.9rem;">Empty. Use <b>📦 Store in Hut</b> on fish in your Net to move them here — recipes and bounties use this reserve after your Net.</p>' : ''}
                         <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:10px;">
                             ${fishes.map(f => `
@@ -2093,7 +2097,10 @@ document.addEventListener('DOMContentLoaded', () => {
                                     <img src="${f.assetPath}" alt="${f.speciesName}" style="height:46px; width:auto; object-fit:contain;">
                                     <div style="font-size:0.85rem; font-weight:700;">${f.speciesName}</div>
                                     <div style="font-size:0.75rem; color:var(--text-secondary);">${(f.weight || 0).toFixed(2)} lbs · 🪙 ${f.value.toLocaleString()}</div>
-                                    <button class="btn-action" style="padding:4px 10px; font-size:0.75rem; margin-top:6px;" onclick="window.retrieveHutFish('${f.id}', '${f.speciesName.replace(/'/g, "\\'")}')">↩️ Retrieve</button>
+                                    <div style="display:flex; gap:6px; margin-top:6px;">
+                                        <button class="btn-action" style="padding:4px 10px; font-size:0.75rem;" onclick="window.retrieveHutFish('${f.id}', '${f.speciesName.replace(/'/g, "\\'")}')">↩️ Retrieve</button>
+                                        <button class="btn-action btn-gold" style="padding:4px 10px; font-size:0.75rem;" onclick="window.sellHutFish('${f.id}', ${f.value}, '${f.speciesName.replace(/'/g, "\\'")}')">🪙 Sell</button>
+                                    </div>
                                 </div>`).join('')}
                         </div>
                     </div>`;
@@ -2110,7 +2117,7 @@ document.addEventListener('DOMContentLoaded', () => {
             cookedEl.innerHTML = `
                 <div class="hut-section">
                     <div style="display:flex; flex-wrap:wrap; align-items:center; gap:10px;">
-                        <h3 style="flex:1;">🍲 Cold Storage & Market Stall</h3>
+                        <h3 style="flex:1;">🍲 Cold Storage & Market Stall <span style="font-size:0.8rem; color:var(--text-muted);">(${items.length} dish${items.length === 1 ? '' : 'es'} · 🪙 ${totalValue.toLocaleString()})</span></h3>
                         <button class="btn-action btn-gold" onclick="window.sellAllCookedItems()" ${items.length === 0 ? 'disabled style="opacity:0.5;"' : ''}>🏪 Sell All to Market Stall (${totalValue.toLocaleString()}g)</button>
                     </div>
                     <p style="color:var(--text-muted); font-size:0.85rem; margin-top:6px;">Dishes spoil after ${h.cookedStorageHours}h. Sell them for gold or save them for today's Angler's Bounty!</p>
@@ -2268,6 +2275,11 @@ document.addEventListener('DOMContentLoaded', () => {
     window.retrieveHutFish = function(storageItemId, speciesName) {
         if (!state.userProfile) return;
         hutAction('retrieve-fish', { userId: state.userProfile.id, storageItemId }, '↩️ Fish Retrieved');
+    };
+
+    window.sellHutFish = function(storageItemId, value, speciesName) {
+        if (!state.userProfile) return;
+        hutAction('sell-fish', { userId: state.userProfile.id, storageItemId }, '🪙 Fish Sold');
     };
 
     window.storeNetFishToHut = function(netItemId, speciesName) {
