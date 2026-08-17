@@ -984,3 +984,98 @@ body {
     border-top: 1px solid var(--border-color);
     margin-top: auto;
 }
+
+/* ============================================================
+   Fishing Hut + Angler's Bounties (RPG hut theme)
+   ============================================================ */
+.hut-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 24px;
+    border-radius: var(--radius-lg);
+    background:
+        radial-gradient(circle at 85% 20%, rgba(255, 183, 3, 0.10) 0%, transparent 45%),
+        linear-gradient(140deg, rgba(40, 26, 14, 0.92) 0%, rgba(22, 30, 46, 0.92) 60%, rgba(8, 15, 28, 0.95) 100%);
+    border: 1px solid rgba(255, 183, 3, 0.35);
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.6), inset 0 0 40px rgba(255, 183, 3, 0.04);
+}
+
+.hut-section {
+    background: rgba(4, 15, 30, 0.85);
+    border: 1px solid rgba(0, 229, 255, 0.25);
+    border-radius: var(--radius-md);
+    padding: 18px 22px;
+}
+
+.hut-section h3 {
+    color: #fff;
+    font-size: 1.05rem;
+    font-weight: 800;
+    margin: 0;
+}
+
+.hut-recipe-card {
+    position: relative;
+    border-color: rgba(255, 183, 3, 0.18) !important;
+}
+
+.hut-recipe-card .item-name {
+    font-size: 0.95rem;
+}
+
+.hut-storage-fish {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 118px;
+    padding: 10px 12px;
+    background: rgba(22, 30, 46, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: var(--radius-md);
+    text-align: center;
+    transition: var(--transition-fast);
+}
+
+.hut-storage-fish:hover {
+    border-color: rgba(0, 229, 255, 0.4);
+    transform: translateY(-2px);
+}
+
+.hut-storage-fish.hut-spoiled {
+    border-color: rgba(244, 63, 94, 0.4);
+    opacity: 0.6;
+}
+
+.bounty-card {
+    background:
+        radial-gradient(circle at 90% 10%, rgba(255, 183, 3, 0.10) 0%, transparent 45%),
+        rgba(4, 15, 30, 0.9);
+    border: 1px solid rgba(255, 183, 3, 0.30);
+    border-radius: var(--radius-lg);
+    padding: 22px 24px;
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.6);
+}
+
+.bounty-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+}
+
+.bounty-reward {
+    text-align: right;
+    padding: 8px 16px;
+    background: rgba(255, 183, 3, 0.08);
+    border: 1px solid rgba(255, 183, 3, 0.30);
+    border-radius: var(--radius-md);
+    min-width: 130px;
+}
+
+@media (max-width: 600px) {
+    .bounty-reward { text-align: left; }
+    .hut-banner { align-items: flex-start; }
+}
+

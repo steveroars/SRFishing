@@ -6,6 +6,8 @@ document.addEventListener('DOMContentLoaded', () => {
         currentUser: null,
         twitchToken: null,
         userProfile: null,
+        hutData: null,
+        bountyData: null,
         activeTab: 'net',
         activeLogFilter: 'all',
         activeRankSubTab: 'catches',
@@ -499,6 +501,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.cooldownTimerInterval = setInterval(() => {
             updateCooldownUI();
             updateDailyClaimUI();
+            updateHutCountdowns();
         }, 1000);
     }
 
@@ -650,6 +653,12 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'craft':
                 renderCraftTab();
                 break;
+            case 'hut':
+                renderHutTab();
+                break;
+            case 'bounties':
+                renderBountiesTab();
+                break;
             case 'ranks':
                 renderRanksTab();
                 break;
@@ -734,6 +743,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const tankFish = state.userProfile ? (state.userProfile.tankFish || []) : [];
             const tankCap = state.userProfile ? (state.userProfile.tankCapacity || 3) : 3;
             const tankFull = tankFish.length >= tankCap;
+            const hutRawCap = state.userProfile ? (state.userProfile.hutRawStorageCapacity || 0) : 0;
+            const hutRawCount = state.userProfile ? (state.userProfile.hutRawStorageCount || 0) : 0;
+            const hutStorageFull = hutRawCap > 0 && hutRawCount >= hutRawCap;
+            const canStoreInHut = state.userProfile && state.userProfile.hasHut && hutRawCap > 0 && !isTrash;
 
             return `
                 <div class="item-card">
@@ -755,6 +768,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         onclick="window.sendToTank('${item.id}', '${item.specName.replace(/'/g, "\\'")}')"
                         ${tankFull ? 'disabled' : ''}>
                         🐠 ${tankFull ? 'Tank Full' : 'Transfer to Tank'}
+                    </button>` : ''}
+                    ${canStoreInHut ? `
+                    <button class="btn-action" style="margin-top:4px; background:linear-gradient(135deg,#8b5cf6,#3b82f6); color:#fff; font-weight:700; ${hutStorageFull ? 'opacity:0.4; cursor:not-allowed;' : ''}"
+                        onclick="window.storeNetFishToHut('${item.id}', '${item.specName.replace(/'/g, "\\'")}')"
+                        ${hutStorageFull ? 'disabled' : ''}>
+                        📦 ${hutStorageFull ? 'Hut Storage Full' : 'Store in Hut'}
                     </button>` : ''}
                 </div>
             `;
@@ -1094,7 +1113,8 @@ document.addEventListener('DOMContentLoaded', () => {
             { name: "Tank Upgrade", price: 85000, desc: "Expands max tank capacity from 3 to 5 fish", icon: "assets/Icons/tank_expansion.png", category: "Upgrade" },
             { name: "Fishing Net", price: 75000, desc: "20% chance to catch a second fish per cast", icon: "assets/Icons/fishing_net.png", category: "Upgrade" },
             { name: "Deep Freezer", price: 100000, desc: "Keeps all catches 100% fresh for 3 days (72h) before decay", icon: "assets/Icons/deep_freezer.png", category: "Upgrade" },
-            { name: "Fishing Vessel", price: 350000, desc: "Enables offshore fishing & double weight rolls", icon: "assets/Icons/fishing_vessel.png", category: "Upgrade" }
+            { name: "Fishing Vessel", price: 350000, desc: "Enables offshore fishing & double weight rolls", icon: "assets/Icons/fishing_vessel.png", category: "Upgrade" },
+            { name: "Fishing Hut", price: 0, desc: "Unlocks the Filleting Station, Market Stall, storage upgrades & Angler's Bounties (FREE during testing — 150,000g after)", icon: "assets/Icons/auto_feeder.png", category: "Upgrade", emoji: "🛖" }
         ];
 
         const activeRodStr = (state.userProfile && state.userProfile.activeRod) ? String(state.userProfile.activeRod).toLowerCase() : 'default';
@@ -1110,7 +1130,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return `
                 <div class="item-card">
                     <span class="item-badge rarity-common">${item.category}</span>
-                    <img src="${item.icon}" class="item-img" alt="${item.name}">
+                    ${item.emoji ? `<div style="font-size:3rem; text-align:center; padding:10px 0; filter: drop-shadow(0 4px 10px rgba(255,183,3,0.35));">${item.emoji}</div>` : `<img src="${item.icon}" class="item-img" alt="${item.name}">`}
                     <div class="item-name">${item.name}</div>
                     <div class="item-desc">${item.desc}</div>
                     ${item.name === "Default Rod" ? `
@@ -1121,9 +1141,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         <button class="btn-action" disabled style="opacity: 0.6; cursor: default; background: var(--bg-tertiary); border: 1px solid var(--accent-emerald); color: var(--accent-emerald);">
                             ✓ Equipped
                         </button>
+                    ` : (item.name === "Fishing Hut" && state.userProfile && state.userProfile.hasHut) ? `
+                        <button class="btn-action" disabled style="opacity: 0.6; cursor: default; background: var(--bg-tertiary); border: 1px solid var(--accent-emerald); color: var(--accent-emerald);">
+                            ✓ Hut Owned — open the Fishing Hut tab!
+                        </button>
                     ` : `
                         <button class="btn-action btn-gold" onclick="window.buyShopItem('${item.name.replace(/'/g, "\\'")}', ${item.price})">
-                            Buy for 🪙 ${item.price.toLocaleString()} Gold
+                            ${item.price <= 0 ? '🎉 FREE (Testing)' : `Buy for 🪙 ${item.price.toLocaleString()} Gold`}
                         </button>
                     `}
                 </div>
@@ -1211,6 +1235,7 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (itemName === 'Fishing Net') upgradeKey = 'fishingnet';
         else if (itemName === 'Deep Freezer') upgradeKey = 'deepfreezer';
         else if (itemName === 'Fishing Vessel') upgradeKey = 'fishingvessel';
+        else if (itemName === 'Fishing Hut') upgradeKey = 'fishinghut';
 
         if (upgradeKey) {
             try {
@@ -1914,8 +1939,361 @@ document.addEventListener('DOMContentLoaded', () => {
         state.syncTimer = setInterval(async () => {
             await fetchUserProfile(true);
             checkLatestBattle();
+            // Only refresh hut/bounty state while their tabs are open (keeps polling light).
+            if (state.activeTab === 'hut') await fetchHutData(true);
+            if (state.activeTab === 'bounties') await fetchBountyData(true);
         }, window.CONFIG.SYNC_INTERVAL_MS);
     }
+
+    // ============================================================
+    // 6b. Fishing Hut + Market Stall + Angler's Bounties
+    // ============================================================
+
+    function formatCountdown(ms) {
+        if (!ms || ms <= 0) return '0s';
+        const totalSec = Math.floor(ms / 1000);
+        const h = Math.floor(totalSec / 3600);
+        const m = Math.floor((totalSec % 3600) / 60);
+        const s = totalSec % 60;
+        if (h > 0) return `${h}h ${m}m`;
+        if (m > 0) return `${m}m ${s}s`;
+        return `${s}s`;
+    }
+
+    function updateHutCountdowns() {
+        document.querySelectorAll('[data-countdown]').forEach(el => {
+            const target = parseInt(el.getAttribute('data-countdown'), 10) || 0;
+            const rem = Math.max(0, target - Date.now());
+            el.textContent = formatCountdown(rem);
+        });
+    }
+
+    async function fetchHutData(isSilent = false) {
+        if (!state.userProfile) return;
+        try {
+            const res = await fetch(`${window.CONFIG.API_BASE_URL}/api/Hut/${state.userProfile.id}`);
+            if (res.ok) {
+                state.hutData = await res.json();
+                if (!isSilent || state.activeTab === 'hut') renderHutTab();
+            }
+        } catch (err) {
+            console.warn('Hut fetch error:', err);
+        }
+    }
+
+    function renderHutTab() {
+        const lockedPanel = document.getElementById('hutLockedPanel');
+        const content = document.getElementById('hutContent');
+        if (!lockedPanel || !content) return;
+
+        const profile = state.userProfile;
+        if (!profile) {
+            lockedPanel.style.display = 'none';
+            content.style.display = 'none';
+            return;
+        }
+
+        // Locked state: player hasn't bought the hut yet.
+        if (!profile.hasHut) {
+            lockedPanel.style.display = 'block';
+            content.style.display = 'none';
+            lockedPanel.innerHTML = `
+                <div style="text-align:center; padding: 40px 20px; background: linear-gradient(160deg, rgba(22,30,46,0.8), rgba(40,26,14,0.7)); border:1px solid rgba(255,183,3,0.25); border-radius: var(--radius-lg);">
+                    <div style="font-size: 3.5rem; filter: drop-shadow(0 4px 10px rgba(255,183,3,0.35));">🛖</div>
+                    <h3 style="margin: 10px 0 6px; color: #fff;">The Fishing Hut isn't yours yet</h3>
+                    <p style="color: var(--text-secondary); max-width: 480px; margin: 0 auto 16px;">
+                        Unlock your own fishing hut to cook dishes, store spare fish, run a Market Stall,
+                        and take on the Angler's Bounties. Head to the <b>Upgrades Shop</b> to purchase it!
+                    </p>
+                    <button class="btn-action btn-gold" onclick="window.switchTabDirectly('shop')">Go to Upgrades Shop</button>
+                </div>`;
+            return;
+        }
+
+        if (!state.hutData) { fetchHutData(); return; }
+
+        const h = state.hutData;
+        content.style.display = 'block';
+        lockedPanel.style.display = 'none';
+
+        // Banner: hut header + toggles + upgrade buttons
+        const banner = document.getElementById('hutBanner');
+        if (banner) {
+            banner.innerHTML = `
+                <div class="hut-banner">
+                    <div style="font-size: 2.2rem; filter: drop-shadow(0 4px 10px rgba(255,183,3,0.35));">🛖</div>
+                    <div style="flex:1; min-width: 220px;">
+                        <div style="font-weight:800; font-size:1.25rem; color:#fff;">${(profile.username || 'Viewer').replace(/</g, '&lt;')}'s Fishing Hut</div>
+                        <div style="font-size:0.85rem; color:var(--text-secondary); margin-top:4px;">
+                            🧊 Cold Storage: <b>Lv${h.cookedStorageLevel}</b> (${h.cookedStorageHours}h shelf life)
+                            &nbsp;·&nbsp; 📦 Raw Storage: <b>${h.rawStorageCount}/${h.rawStorageCapacity || 0}</b>
+                        </div>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:6px; align-items:flex-end;">
+                        <button class="btn-action ${h.autoSellEnabled ? '' : 'btn-gold'}" onclick="window.toggleHutAutoSell()" style="white-space:nowrap;">
+                            ${h.autoSellEnabled ? '✅ Auto-Sell: ON' : '⛔ Auto-Sell: OFF'}
+                        </button>
+                        ${h.rawStorageCapacity === 0 ? `<button class="btn-action btn-gold" onclick="window.buyHutRawStorage()">📦 Unlock Raw Storage (10) — 50,000g</button>` : ''}
+                        ${h.cookedStorageLevel < 2 ? `<button class="btn-action btn-gold" onclick="window.buyHutCookedStorage(2)">🧊 Cold Storage Lv2 (24h) — 10,000g</button>` : (h.cookedStorageLevel < 3 ? `<button class="btn-action btn-gold" onclick="window.buyHutCookedStorage(3)">🧊 Cold Storage Lv3 (72h) — 25,000g</button>` : '')}
+                    </div>
+                </div>`;
+        }
+
+        // Filleting Station recipe grid
+        const fillGrid = document.getElementById('hutFilletingGrid');
+        if (fillGrid) {
+            fillGrid.innerHTML = `
+                <div style="grid-column: 1 / -1;">
+                    <div class="section-header" style="margin-bottom:4px;">
+                        <h2 class="section-title" style="font-size:1.1rem;">🔪 Filleting Station</h2>
+                        <span style="font-size:0.8rem; color:var(--text-muted);">2 specials rotate daily at midnight UTC</span>
+                    </div>
+                </div>
+                ${(h.recipes || []).map(r => {
+                    const ingText = (r.ingredients || []).map(i => `${i.count}× ${i.isTrash ? 'Trash' : i.tier}`).join(' + ');
+                    const badge = r.isSpecial
+                        ? (r.isTodaySpecial ? '<span class="item-badge rarity-legendary">⭐ SPECIAL</span>' : '<span class="item-badge rarity-common">OFF-MENU</span>')
+                        : '<span class="item-badge rarity-uncommon">STANDARD</span>';
+                    return `
+                    <div class="item-card hut-recipe-card">
+                        ${badge}
+                        <div style="font-size:2.4rem; text-align:center; margin:6px 0;">${r.emoji}</div>
+                        <div class="item-name" style="text-align:center;">${r.name}</div>
+                        <div class="item-desc" style="text-align:center; min-height:44px;">${r.description}</div>
+                        <div style="text-align:center; font-size:0.82rem; color:var(--accent-gold); font-weight:700; margin:2px 0 8px;">🍽️ ${ingText}</div>
+                        ${r.canCook ? `
+                            <button class="btn-action btn-gold" onclick="window.cookHutRecipe(${r.id}, '${r.name.replace(/'/g, "\\'")}')">👨‍🍳 Cook</button>
+                        ` : `
+                            <button class="btn-action" disabled style="opacity:0.55; cursor:not-allowed;" title="${(r.missing || 'Missing ingredients').replace(/"/g, '&quot;')}">Missing Ingredients</button>
+                            <div style="text-align:center; font-size:0.72rem; color:var(--text-muted); margin-top:4px;">${r.missing || ''}</div>
+                        `}
+                    </div>`;
+                }).join('')}`;
+        }
+
+        // Raw fish storage
+        const rawEl = document.getElementById('hutRawStorage');
+        if (rawEl) {
+            if (h.rawStorageCapacity === 0) {
+                rawEl.innerHTML = `<div class="hut-section"><h3>📦 Raw Fish Storage</h3><p style="color:var(--text-muted);">Unlock the <b>Raw Fish Storage</b> upgrade above to keep a 10-fish reserve. Recipes and bounties pull from your Net first, then this storage.</p></div>`;
+            } else {
+                const fishes = h.rawStorage || [];
+                rawEl.innerHTML = `
+                    <div class="hut-section">
+                        <h3>📦 Raw Fish Storage <span style="font-size:0.8rem; color:var(--text-muted);">(${fishes.length}/${h.rawStorageCapacity})</span></h3>
+                        ${fishes.length === 0 ? '<p style="color:var(--text-muted); font-size:0.9rem;">Empty. Use <b>📦 Store in Hut</b> on fish in your Net to move them here — recipes and bounties use this reserve after your Net.</p>' : ''}
+                        <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:10px;">
+                            ${fishes.map(f => `
+                                <div class="hut-storage-fish">
+                                    <img src="${f.assetPath}" alt="${f.speciesName}" style="height:46px; width:auto; object-fit:contain;">
+                                    <div style="font-size:0.85rem; font-weight:700;">${f.speciesName}</div>
+                                    <div style="font-size:0.75rem; color:var(--text-secondary);">${(f.weight || 0).toFixed(2)} lbs · 🪙 ${f.value.toLocaleString()}</div>
+                                    <button class="btn-action" style="padding:4px 10px; font-size:0.75rem; margin-top:6px;" onclick="window.retrieveHutFish('${f.id}', '${f.speciesName.replace(/'/g, "\\'")}')">↩️ Retrieve</button>
+                                </div>`).join('')}
+                        </div>
+                    </div>`;
+            }
+        }
+
+        // Cold storage + Market Stall
+        const cookedEl = document.getElementById('hutCookedStorage');
+        if (cookedEl) {
+            const items = (h.cookedItems || []).filter(i => !i.expired);
+            const recipeById = {};
+            (h.recipes || []).forEach(r => { recipeById[r.id] = r.emoji; });
+            const totalValue = items.reduce((s, i) => s + i.value, 0);
+            cookedEl.innerHTML = `
+                <div class="hut-section">
+                    <div style="display:flex; flex-wrap:wrap; align-items:center; gap:10px;">
+                        <h3 style="flex:1;">🍲 Cold Storage & Market Stall</h3>
+                        <button class="btn-action btn-gold" onclick="window.sellAllCookedItems()" ${items.length === 0 ? 'disabled style="opacity:0.5;"' : ''}>🏪 Sell All to Market Stall (${totalValue.toLocaleString()}g)</button>
+                    </div>
+                    <p style="color:var(--text-muted); font-size:0.85rem; margin-top:6px;">Dishes spoil after ${h.cookedStorageHours}h. Sell them for gold or save them for today's Angler's Bounty!</p>
+                    ${items.length === 0 ? '<p style="color:var(--text-muted); font-size:0.9rem; margin-top:10px;">No dishes in cold storage yet. Pick a recipe above and cook!</p>' : `
+                        <div style="display:flex; flex-wrap:wrap; gap:10px; margin-top:12px;">
+                            ${items.map(i => `
+                                <div class="hut-storage-fish">
+                                    <div style="font-size:1.8rem;">${recipeById[i.recipeId] || '🍽️'}</div>
+                                    <div style="font-size:0.85rem; font-weight:700;">${i.recipeName}</div>
+                                    <div style="font-size:0.75rem; color:var(--accent-gold); font-weight:700;">🪙 ${i.value.toLocaleString()}</div>
+                                    <div style="font-size:0.72rem; color:var(--text-secondary);">Spoils in <span data-countdown="${new Date(i.expiresAt).getTime()}">…</span></div>
+                                    <button class="btn-action" style="padding:4px 10px; font-size:0.75rem; margin-top:6px;" onclick="window.sellCookedItem('${i.id}', ${i.value}, '${i.recipeName.replace(/'/g, "\\'")}')">🏪 Sell</button>
+                                </div>`).join('')}
+                        </div>`}
+                </div>`;
+        }
+    }
+
+    async function fetchBountyData(isSilent = false) {
+        if (!state.userProfile) return;
+        try {
+            const res = await fetch(`${window.CONFIG.API_BASE_URL}/api/Bounty/${state.userProfile.id}`);
+            if (res.ok) {
+                state.bountyData = await res.json();
+                if (!isSilent || state.activeTab === 'bounties') renderBountiesTab();
+            }
+        } catch (err) {
+            console.warn('Bounty fetch error:', err);
+        }
+    }
+
+    function renderBountiesTab() {
+        const card = document.getElementById('bountyCard');
+        if (!card) return;
+        if (!state.bountyData) { fetchBountyData(); return; }
+
+        const b = state.bountyData;
+        const current = (b.progress && b.progress.current) || 0;
+        const required = (b.progress && b.progress.required) || 1;
+        const pct = Math.min(100, Math.round((current / required) * 100));
+        const canClaim = !b.completed && current >= required;
+
+        card.innerHTML = `
+            <div class="bounty-card">
+                <div class="bounty-header">
+                    <div style="font-size:2.4rem; filter: drop-shadow(0 4px 10px rgba(255,183,3,0.35));">📜</div>
+                    <div style="flex:1;">
+                        <div style="font-weight:800; font-size:1.2rem; color:#fff;">${b.title}</div>
+                        <div style="color:var(--text-secondary); font-size:0.9rem; margin-top:4px;">${b.desc}</div>
+                    </div>
+                    <div class="bounty-reward">
+                        <div style="font-size:0.72rem; letter-spacing:1px; color:var(--text-muted);">REWARD</div>
+                        <div style="font-size:1.35rem; font-weight:800; color:var(--accent-gold);">🪙 ${b.reward.toLocaleString()}</div>
+                    </div>
+                </div>
+                <div style="margin-top:16px;">
+                    <div style="display:flex; justify-content:space-between; font-size:0.82rem; color:var(--text-secondary); margin-bottom:6px;">
+                        <span>Progress</span>
+                        <span>${b.completed ? '✅ Completed!' : `${current} / ${required}`}</span>
+                    </div>
+                    <div style="height:10px; border-radius:999px; background: rgba(255,255,255,0.08); overflow:hidden;">
+                        <div style="height:100%; width:${pct}%; border-radius:999px; background: linear-gradient(90deg, var(--accent-cyan), var(--accent-gold)); transition: width .4s ease;"></div>
+                    </div>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px; flex-wrap:wrap; gap:8px;">
+                    <span style="font-size:0.8rem; color:var(--text-muted);">⏳ Expires in <span data-countdown="${new Date(b.expiresAt).getTime()}">…</span> · 🔁 New bounty at midnight UTC</span>
+                    <button class="btn-action btn-gold" onclick="window.claimBounty()" ${canClaim ? '' : 'disabled style="opacity:0.55; cursor:not-allowed;"'}>
+                        ${b.completed ? '✅ Claimed Today' : (canClaim ? '🏆 Claim Bounty!' : '🔒 Turn in the goods first')}
+                    </button>
+                </div>
+            </div>`;
+    }
+
+    window.switchTabDirectly = function(tabId) {
+        switchTab(tabId);
+    };
+
+    // --- Hut / Bounty action handlers ---
+    async function hutAction(endpoint, body, successTitle) {
+        try {
+            const res = await fetch(`${window.CONFIG.API_BASE_URL}/api/Hut/${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                if (data.newGold !== undefined && state.userProfile) state.userProfile.gold = data.newGold;
+                if (data.autoSellEnabled !== undefined && state.hutData) state.hutData.autoSellEnabled = data.autoSellEnabled;
+                await fetchUserProfile(true);
+                await fetchHutData(true);
+                window.showAppModal({ icon: '🛖', title: successTitle, message: data.message || 'Done!' });
+            } else {
+                window.showAppModal({ icon: '❌', title: 'Hut Action Failed', message: data.message || 'Could not complete that action.' });
+            }
+        } catch (err) {
+            console.warn('Hut action error:', err);
+            window.showAppModal({ icon: '❌', title: 'Error', message: 'Could not reach the hut service.' });
+        }
+    }
+
+    window.cookHutRecipe = function(recipeId, recipeName) {
+        if (!state.userProfile) return;
+        hutAction('cook', { userId: state.userProfile.id, recipeId }, '👨‍🍳 Cooked!');
+    };
+
+    window.sellCookedItem = function(cookedItemId, value, recipeName) {
+        if (!state.userProfile) return;
+        hutAction('sell-cooked', { userId: state.userProfile.id, cookedItemId }, '🏪 Market Stall Sale');
+    };
+
+    window.sellAllCookedItems = function() {
+        if (!state.userProfile) return;
+        window.showAppModal({
+            icon: '🏪',
+            title: 'Sell Everything?',
+            message: 'Sell every fresh dish in cold storage to the Market Stall?',
+            confirmText: 'Sell All',
+            cancelText: 'Cancel',
+            onConfirm: () => hutAction('sell-all-cooked', { userId: state.userProfile.id }, '🏪 Market Stall Sale')
+        });
+    };
+
+    window.toggleHutAutoSell = function() {
+        if (!state.userProfile) return;
+        hutAction('toggle-auto-sell', { userId: state.userProfile.id }, '⚙️ Auto-Sell Updated');
+    };
+
+    window.buyHutRawStorage = function() {
+        if (!state.userProfile) return;
+        window.showAppModal({
+            icon: '📦',
+            title: 'Unlock Raw Fish Storage?',
+            message: 'Unlock 10 slots of raw fish storage in your hut for 50,000 Gold? Recipes and bounties pull from here after your Net.',
+            confirmText: 'Buy for 50,000g',
+            cancelText: 'Cancel',
+            onConfirm: () => hutAction('buy-raw-storage', { userId: state.userProfile.id }, '📦 Storage Unlocked')
+        });
+    };
+
+    window.buyHutCookedStorage = function(level) {
+        if (!state.userProfile) return;
+        const price = level === 2 ? 10000 : 25000;
+        const hours = level === 2 ? 24 : 72;
+        window.showAppModal({
+            icon: '🧊',
+            title: `Upgrade Cold Storage to Lv${level}?`,
+            message: `Dishes will keep for ${hours} hours instead of the current shelf life. Cost: ${price.toLocaleString()} Gold.`,
+            confirmText: `Buy for ${price.toLocaleString()}g`,
+            cancelText: 'Cancel',
+            onConfirm: () => hutAction('buy-cooked-storage', { userId: state.userProfile.id, level }, '🧊 Storage Upgraded')
+        });
+    };
+
+    window.retrieveHutFish = function(storageItemId, speciesName) {
+        if (!state.userProfile) return;
+        hutAction('retrieve-fish', { userId: state.userProfile.id, storageItemId }, '↩️ Fish Retrieved');
+    };
+
+    window.storeNetFishToHut = function(netItemId, speciesName) {
+        if (!state.userProfile) return;
+        hutAction('store-fish', { userId: state.userProfile.id, netItemId }, '📦 Stored in Hut');
+    };
+
+    window.claimBounty = function() {
+        if (!state.userProfile || !state.bountyData) return;
+        (async () => {
+            try {
+                const res = await fetch(`${window.CONFIG.API_BASE_URL}/api/Bounty/claim`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: state.userProfile.id })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (res.ok) {
+                    if (data.newGold !== undefined && state.userProfile) state.userProfile.gold = data.newGold;
+                    await fetchUserProfile(true);
+                    await fetchBountyData(true);
+                    window.showAppModal({ icon: '🏆', title: 'Bounty Complete!', message: data.message || `Earned ${data.reward || 0} Gold!` });
+                } else {
+                    window.showAppModal({ icon: '❌', title: 'Bounty Claim Failed', message: data.message || 'Could not claim the bounty.' });
+                }
+            } catch (err) {
+                console.warn('Bounty claim error:', err);
+                window.showAppModal({ icon: '❌', title: 'Error', message: 'Could not reach the bounty service.' });
+            }
+        })();
+    };
 
     // Global action bindings (with custom modal popups and immediate local state persistence)
     window.sellFish = async function(fishId, sellPrice, specName) {
