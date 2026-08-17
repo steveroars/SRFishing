@@ -382,6 +382,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (res.ok) {
                 const serverData = await res.json();
+                // Reset hut/bounty caches if a different account is now loaded.
+                if (state.userProfile && serverData.id !== state.userProfile.id) {
+                    state.hutData = null;
+                    state.bountyData = null;
+                }
                 state.userProfile = serverData;
                 saveLocalProfile();
                 renderProfileData(isSilent);
