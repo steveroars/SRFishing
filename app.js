@@ -1119,7 +1119,7 @@ document.addEventListener('DOMContentLoaded', () => {
             { name: "Fishing Net", price: 75000, desc: "20% chance to catch a second fish per cast", icon: "assets/Icons/fishing_net.png", category: "Upgrade" },
             { name: "Deep Freezer", price: 100000, desc: "Keeps all catches 100% fresh for 3 days (72h) before decay", icon: "assets/Icons/deep_freezer.png", category: "Upgrade" },
             { name: "Fishing Vessel", price: 350000, desc: "Enables offshore fishing & double weight rolls", icon: "assets/Icons/fishing_vessel.png", category: "Upgrade" },
-            { name: "Fishing Hut", price: 0, desc: "Unlocks the Filleting Station, Market Stall, storage upgrades & Angler's Bounties (FREE during testing — 150,000g after)", icon: "assets/Icons/auto_feeder.png", category: "Upgrade", emoji: "🛖" }
+            { name: "Fishing Hut", price: 150000, desc: "Unlocks the Filleting Station, Market Stall, storage upgrades & Angler's Bounties", icon: "assets/Icons/auto_feeder.png", category: "Upgrade", emoji: "🛖" }
         ];
 
         const activeRodStr = (state.userProfile && state.userProfile.activeRod) ? String(state.userProfile.activeRod).toLowerCase() : 'default';
@@ -1393,6 +1393,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 <button class="filter-btn ${activeSub === 'trophies' ? 'active' : ''}" onclick="window.setRankSubTab('trophies')">🏆 Trophy Records</button>
                 <button class="filter-btn ${activeSub === 'gold' ? 'active' : ''}" onclick="window.setRankSubTab('gold')">🪙 Most Richest</button>
                 <button class="filter-btn ${activeSub === 'battles' ? 'active' : ''}" onclick="window.setRankSubTab('battles')">⚔️ Battles Won</button>
+                <button class="filter-btn ${activeSub === 'cooked' ? 'active' : ''}" onclick="window.setRankSubTab('cooked')">🍳 Most Cooked</button>
+                <button class="filter-btn ${activeSub === 'bounties' ? 'active' : ''}" onclick="window.setRankSubTab('bounties')">📜 Most Bounties</button>
             </div>
         `;
 
@@ -1405,11 +1407,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            const [catchesRes, trophiesRes, goldRes, battlesRes] = await Promise.all([
+            const [catchesRes, trophiesRes, goldRes, battlesRes, cookedRes, bountiesRes] = await Promise.all([
                 fetch(`${window.CONFIG.API_BASE_URL}/api/Leaderboard/catches`).catch(() => null),
                 fetch(`${window.CONFIG.API_BASE_URL}/api/Leaderboard/trophies`).catch(() => null),
                 fetch(`${window.CONFIG.API_BASE_URL}/api/Leaderboard/gold`).catch(() => null),
-                fetch(`${window.CONFIG.API_BASE_URL}/api/Leaderboard/battles`).catch(() => null)
+                fetch(`${window.CONFIG.API_BASE_URL}/api/Leaderboard/battles`).catch(() => null),
+                fetch(`${window.CONFIG.API_BASE_URL}/api/Leaderboard/most-cooked`).catch(() => null),
+                fetch(`${window.CONFIG.API_BASE_URL}/api/Leaderboard/most-bounties`).catch(() => null)
             ]);
 
             const catchesData = (catchesRes && catchesRes.ok) ? await catchesRes.json() : [
@@ -1434,6 +1438,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 { username: "SteveRoars", battlesWon: 48 },
                 { username: "BattleChamp", battlesWon: 32 },
                 { username: "FishFighter", battlesWon: 19 }
+            ];
+
+            const cookedData = (cookedRes && cookedRes.ok) ? await cookedRes.json() : [
+                { username: "SteveRoars", totalCooked: 25 },
+                { username: "ChefAngler", totalCooked: 14 },
+                { username: "FisherKing", totalCooked: 9 }
+            ];
+
+            const bountiesData = (bountiesRes && bountiesRes.ok) ? await bountiesRes.json() : [
+                { username: "SteveRoars", totalBounties: 6 },
+                { username: "BountyHunter", totalBounties: 4 },
+                { username: "TaskMaster", totalBounties: 3 }
             ];
 
             let cardContentHtml = '';
@@ -1497,6 +1513,36 @@ document.addEventListener('DOMContentLoaded', () => {
                             <div style="display:flex; justify-content:space-between; padding: 10px 0; border-bottom: 1px solid var(--border-glass);">
                                 <span><b>${idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '#' + (idx + 1)} ${row.username || 'Angler'}</b></span>
                                 <span style="color: var(--accent-emerald); font-weight:700;">${(row.battlesWon || 0).toLocaleString()} Wins</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            } else if (activeSub === 'cooked') {
+                cardContentHtml = `
+                    <div class="item-card" style="align-items: stretch; text-align: left;">
+                        <h3 style="margin-bottom: 12px; display:flex; align-items:center; gap:8px;">
+                            <span>🍳</span> Most Cooked Leaderboard
+                        </h3>
+                        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 14px;">Lifetime recipes cooked at the Filleting Station</div>
+                        ${cookedData.map((row, idx) => `
+                            <div style="display:flex; justify-content:space-between; padding: 10px 0; border-bottom: 1px solid var(--border-glass);">
+                                <span><b>${idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '#' + (idx + 1)} ${row.username || 'Angler'}</b></span>
+                                <span style="color: var(--accent-gold); font-weight:700;">${(row.totalCooked || 0).toLocaleString()} Cooked</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            } else if (activeSub === 'bounties') {
+                cardContentHtml = `
+                    <div class="item-card" style="align-items: stretch; text-align: left;">
+                        <h3 style="margin-bottom: 12px; display:flex; align-items:center; gap:8px;">
+                            <span>📜</span> Most Bounties Leaderboard
+                        </h3>
+                        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 14px;">Lifetime Angler's Bounties completed</div>
+                        ${bountiesData.map((row, idx) => `
+                            <div style="display:flex; justify-content:space-between; padding: 10px 0; border-bottom: 1px solid var(--border-glass);">
+                                <span><b>${idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '#' + (idx + 1)} ${row.username || 'Angler'}</b></span>
+                                <span style="color: var(--accent-emerald); font-weight:700;">${(row.totalBounties || 0).toLocaleString()} Bounties</span>
                             </div>
                         `).join('')}
                     </div>
@@ -2032,6 +2078,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div style="font-size:0.85rem; color:var(--text-secondary); margin-top:4px;">
                             🧊 Cold Storage: <b>Lv${h.cookedStorageLevel}</b> (${h.cookedStorageHours}h shelf life) · <span style="color:var(--accent-cyan); font-weight:700;">${(h.cookedItems || []).filter(i => !i.expired).length} dish(es) stored</span>
                             &nbsp;·&nbsp; 📦 Raw Storage: <b>${h.rawStorageCount}/${h.rawStorageCapacity || 0}</b> fish
+                            &nbsp;·&nbsp; 🍳 Lifetime cooked: <b>${h.totalCooked || 0}</b>
                         </div>
                     </div>
                     <div style="display:flex; flex-direction:column; gap:6px; align-items:flex-end;">
