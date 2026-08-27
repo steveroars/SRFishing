@@ -2114,7 +2114,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span style="font-size:0.8rem; color:var(--text-muted);">2 specials rotate daily at midnight UTC</span>
                     </div>
                 </div>
-                ${(h.recipes || []).map(r => {
+                ${(h.recipes || []).slice().sort((a, b) => {
+                    // Show 3 standard recipes first, then the 2 active daily specials, then off-menu.
+                    const rank = r => r.isSpecial ? (r.isTodaySpecial ? 1 : 2) : 0;
+                    return rank(a) - rank(b);
+                }).map(r => {
                     const ingText = (r.ingredients || []).map(i => `${i.count}× ${i.isTrash ? 'Trash' : i.tier}`).join(' + ');
                     const badge = r.isSpecial
                         ? (r.isTodaySpecial ? '<span class="item-badge rarity-legendary">⭐ SPECIAL</span>' : '<span class="item-badge rarity-common">OFF-MENU</span>')
