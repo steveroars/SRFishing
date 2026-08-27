@@ -1132,6 +1132,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 (item.name === "Divine Rod" && (activeRodStr.includes('divine') || activeRodStr === '3'))
             );
 
+            // One-time permanent upgrades already owned by the player (you can only buy them once).
+            const isUpgradeOwned = item.category === "Upgrade" && state.userProfile && (
+                (item.name === "Auto-Feeder" && state.userProfile.hasAutoFeeder) ||
+                (item.name === "Tank Upgrade" && (state.userProfile.tankCapacity || 3) >= 5) ||
+                (item.name === "Fishing Net" && state.userProfile.hasFishingNet) ||
+                (item.name === "Deep Freezer" && state.userProfile.hasDeepFreezer) ||
+                (item.name === "Fishing Vessel" && state.userProfile.hasFishingVessel)
+            );
+
             return `
                 <div class="item-card">
                     <span class="item-badge rarity-common">${item.category}</span>
@@ -1149,6 +1158,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     ` : (item.name === "Fishing Hut" && state.userProfile && state.userProfile.hasHut) ? `
                         <button class="btn-action" disabled style="opacity: 0.6; cursor: default; background: var(--bg-tertiary); border: 1px solid var(--accent-emerald); color: var(--accent-emerald);">
                             ✓ Hut Owned — open the Fishing Hut tab!
+                        </button>
+                    ` : isUpgradeOwned ? `
+                        <button class="btn-action" disabled style="opacity: 0.6; cursor: default; background: var(--bg-tertiary); border: 1px solid var(--accent-emerald); color: var(--accent-emerald);">
+                            ✓ Equipped
                         </button>
                     ` : `
                         <button class="btn-action btn-gold" onclick="window.buyShopItem('${item.name.replace(/'/g, "\\'")}', ${item.price})">
